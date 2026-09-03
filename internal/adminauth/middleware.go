@@ -342,9 +342,11 @@ func (s *Service) HandleSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	csrfToken, _ := s.IssueCSRFToken(sess.ID)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"authenticated": true,
 		"login":         sess.Login,
+		"csrf_token":    csrfToken,
 	})
 }
 
@@ -358,6 +360,10 @@ func (s *Service) RegisterRoutes(mux *http.ServeMux) {
 
 // HandleLogout revokes the session and clears cookies.
 func (s *Service) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	cookie, err := r.Cookie(SessionCookieName)
 	if err == nil && cookie.Value != "" {
 		if sessionID, err := verifySessionToken(cookie.Value, []byte(s.cfg.SessionSecret)); err == nil {

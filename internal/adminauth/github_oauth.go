@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -106,7 +107,7 @@ func (s *Service) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stateCookie, err := r.Cookie(OAuthStateCookieName)
-	if err != nil || stateCookie.Value == "" || stateCookie.Value != state {
+	if err != nil || stateCookie.Value == "" || subtle.ConstantTimeCompare([]byte(stateCookie.Value), []byte(state)) != 1 {
 		http.Error(w, "invalid or missing oauth state", http.StatusBadRequest)
 		return
 	}
@@ -198,6 +199,7 @@ func (s *Service) exchangeCode(ctx context.Context, code, codeVerifier string) (
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "portfolio-admin/1.0")
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -236,6 +238,7 @@ func (s *Service) fetchGitHubUser(ctx context.Context, accessToken string) (stri
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "portfolio-admin/1.0")
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
