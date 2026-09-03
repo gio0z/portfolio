@@ -6,18 +6,58 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"portfolio/internal/publicapi"
+	"portfolio/internal/publishing"
 )
 
+type ServerOption func(*Server)
+
 type Server struct {
-	mux         *http.ServeMux
-	submissions []ContactSubmission
-	mu          sync.RWMutex
+	mux           *http.ServeMux
+	submissions   []ContactSubmission
+	mu            sync.RWMutex
+	publicHandler *publicapi.Handler
 }
 
-func NewServer() *Server {
+// WithRepository configures the server with a publishing repository for public lab endpoints.
+func WithRepository(repo publishing.Repository) ServerOption {
+	return func(s *Server) {
+		s.publicHandler = publicapi.NewHandlerWithRepo(repo)
+	}
+}
+
+// WithPublicAPIReader configures the server with a publicapi.ProjectReader.
+func WithPublicAPIReader(reader publicapi.ProjectReader) ServerOption {
+	return func(s *Server) {
+		s.publicHandler = publicapi.NewHandler(reader)
+	}
+}
+
+// SetRepository dynamically updates the publishing repository backing public lab endpoints.
+func (s *Server) SetRepository(repo publishing.Repository) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.publicHandler = publicapi.NewHandlerWithRepo(repo)
+}
+
+// SetPublicAPIReader dynamically updates the project reader backing public lab endpoints.
+func (s *Server) SetPublicAPIReader(reader publicapi.ProjectReader) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.publicHandler = publicapi.NewHandler(reader)
+}
+
+func NewServer(opts ...ServerOption) *Server {
 	s := &Server{
 		mux:         http.NewServeMux(),
 		submissions: make([]ContactSubmission, 0),
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	if s.publicHandler == nil {
+		s.publicHandler = publicapi.NewHandler(nil)
 	}
 	s.routes()
 	return s
@@ -43,6 +83,38 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/projects", s.handleProjects)
 	s.mux.HandleFunc("/api/skills", s.handleSkills)
 	s.mux.HandleFunc("/api/contact", s.handleContact)
+
+	// Public Lab & Design Lab catalog endpoints
+	s.mux.HandleFunc("/api/lab/projects", func(w http.ResponseWriter, r *http.Request) {
+		s.mu.RLock()
+		h := s.publicHandler
+		s.mu.RUnlock()
+		if h != nil {
+			h.HandleListProjects(w, r)
+		} else {
+			publicapi.NewHandler(nil).HandleListProjects(w, r)
+		}
+	})
+	s.mux.HandleFunc("/api/lab/projects/", func(w http.ResponseWriter, r *http.Request) {
+		s.mu.RLock()
+		h := s.publicHandler
+		s.mu.RUnlock()
+		if h != nil {
+			h.HandleProjectSubpath(w, r)
+		} else {
+			publicapi.NewHandler(nil).HandleProjectSubpath(w, r)
+		}
+	})
+	s.mux.HandleFunc("/api/portfolio/design-lab", func(w http.ResponseWriter, r *http.Request) {
+		s.mu.RLock()
+		h := s.publicHandler
+		s.mu.RUnlock()
+		if h != nil {
+			h.HandlePortfolioDesignLab(w, r)
+		} else {
+			publicapi.NewHandler(nil).HandlePortfolioDesignLab(w, r)
+		}
+	})
 }
 
 func jsonResponse(w http.ResponseWriter, status int, data interface{}) {
