@@ -4,7 +4,7 @@ import { Hero } from './components/Hero';
 import { TrustBar } from './components/TrustBar';
 import { PhilosophySection } from './components/PhilosophySection';
 import { ExpertiseSection } from './components/ExpertiseSection';
-import { FilmAccordionSection } from './components/FilmAccordionSection';
+import { CoverflowSection } from './components/CoverflowSection';
 import { ContactSection } from './components/ContactSection';
 import { Footer } from './components/Footer';
 import type { Profile, Project } from './types';
@@ -49,8 +49,8 @@ export function App() {
         {/* 6. "Expertise" Section (Asymmetric Split + Horizontal Drawer Strip) */}
         <ExpertiseSection />
 
-        {/* 7. 3D Three.js Film Strip Accordion Portfolio Showcase */}
-        <FilmAccordionSection projects={projects} />
+        {/* 7. 3D Stacked Coverflow / Layered Cards Showcase */}
+        <CoverflowSection projects={projects} />
 
         {/* 8. Contact & Collaboration */}
         <ContactSection />
