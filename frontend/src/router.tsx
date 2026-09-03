@@ -8,6 +8,9 @@ import { ExpertiseSection } from './components/ExpertiseSection';
 import { CoverflowSection } from './components/CoverflowSection';
 import { ContactSection } from './components/ContactSection';
 import { Footer } from './components/Footer';
+import { AdminLayout } from './admin/AdminLayout';
+import { AdminOverview } from './admin/AdminOverview';
+import { ReviewQueue } from './admin/ReviewQueue';
 import type { Profile, Project } from './types';
 
 export function PortfolioShell() {
@@ -46,15 +49,6 @@ export function PortfolioShell() {
   );
 }
 
-function AdminShellFallback() {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold">Review Queue</h1>
-      <p className="text-zinc-600">Admin portal shell</p>
-    </div>
-  );
-}
-
 function LabShellFallback() {
   return (
     <div className="p-8">
@@ -63,13 +57,6 @@ function LabShellFallback() {
     </div>
   );
 }
-
-const LazyAdminShell = React.lazy(
-  () =>
-    Promise.resolve({
-      default: AdminShellFallback,
-    })
-);
 
 const LazyLabShell = React.lazy(
   () =>
@@ -83,14 +70,12 @@ export function AppRouter() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<PortfolioShell />} />
-        <Route
-          path="/admin/*"
-          element={
-            <Suspense fallback={<AdminShellFallback />}>
-              <LazyAdminShell />
-            </Suspense>
-          }
-        />
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminOverview />} />
+          <Route path="overview" element={<AdminOverview />} />
+          <Route path="reviews" element={<ReviewQueue />} />
+          <Route path="*" element={<AdminOverview />} />
+        </Route>
         <Route
           path="/lab/*"
           element={
