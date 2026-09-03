@@ -108,7 +108,8 @@ func TestArtifactValidationRejectsUnsafeArchives(t *testing.T) {
 		zip  []byte
 	}{
 		{name: "parent traversal", zip: makeZip(t, "../escape.html", 0644)},
-		{name: "symlink", zip: makeZip(t, "link", os.ModeSymlink|0777)},
+		{name: "symlink", zip: makeZip(t, "link", os.ModeSymlink|0644)},
+		{name: "scripted SVG in archive", zip: makeZipWithContent(t, "assets/logo.svg", 0644, []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`))},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -144,7 +145,96 @@ func TestArtifactStorePromoteRejectsTraversalAndWritesPublication(t *testing.T) 
 	}
 }
 
+func TestArtifactStorePromoteRejectsMissingArtifact(t *testing.T) {
+	root := t.TempDir()
+	store := NewLocalArtifactStore(root, AssetPolicy{MaxBytes: 1024})
+	ref := ArtifactRef{
+		SHA256: strings.Repeat("a", 64),
+	}
+	if _, err := store.Promote(context.Background(), ref, "project-1/release.json"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Promote missing artifact error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestArtifactStoreHashValidation(t *testing.T) {
+	root := t.TempDir()
+	store := NewLocalArtifactStore(root, AssetPolicy{MaxBytes: 1024})
+
+	invalidHashes := []string{
+		"too-short",
+		strings.Repeat("a", 63),
+		strings.Repeat("a", 65),
+		strings.Repeat("A", 64), // uppercase not allowed
+		strings.Repeat("g", 64), // non-hex
+		"../" + strings.Repeat("a", 61),
+	}
+
+	for _, invalid := range invalidHashes {
+		if _, _, err := store.Open(context.Background(), invalid); err == nil {
+			t.Errorf("Open(%q) expected error, got nil", invalid)
+		}
+
+		ref := ArtifactRef{SHA256: invalid}
+		if _, err := store.Promote(context.Background(), ref, "project-1/release.json"); err == nil {
+			t.Errorf("Promote(%q) expected error, got nil", invalid)
+		}
+	}
+}
+
+func TestArtifactStoreDeletePreview(t *testing.T) {
+	root := t.TempDir()
+	store := NewLocalArtifactStore(root, AssetPolicy{MaxBytes: 1024})
+
+	// Traversal and invalid hash rejection
+	invalidHashes := []string{
+		"",
+		"../escape",
+		"../../etc",
+		strings.Repeat("A", 64),
+		strings.Repeat("g", 64),
+		"short",
+	}
+	for _, invalid := range invalidHashes {
+		err := store.DeletePreview(context.Background(), invalid)
+		if !errors.Is(err, ErrUnsafePath) {
+			t.Errorf("DeletePreview(%q) error = %v, want ErrUnsafePath", invalid, err)
+		}
+	}
+
+	// Valid preview cleanup
+	validHash := strings.Repeat("b", 64)
+	previewDir := filepath.Join(root, "var", "portfolio", "previews", validHash)
+	if err := os.MkdirAll(previewDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	sampleFile := filepath.Join(previewDir, "index.html")
+	if err := os.WriteFile(sampleFile, []byte("<h1>preview</h1>"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(previewDir); err != nil {
+		t.Fatalf("preview dir should exist: %v", err)
+	}
+
+	if err := store.DeletePreview(context.Background(), validHash); err != nil {
+		t.Fatalf("DeletePreview failed: %v", err)
+	}
+
+	if _, err := os.Stat(previewDir); !os.IsNotExist(err) {
+		t.Fatalf("preview dir should be removed, got err = %v", err)
+	}
+
+	// Idempotent deletion on non-existent preview
+	if err := store.DeletePreview(context.Background(), validHash); err != nil {
+		t.Fatalf("subsequent DeletePreview should succeed, got %v", err)
+	}
+}
+
 func makeZip(t *testing.T, name string, mode os.FileMode) []byte {
+	return makeZipWithContent(t, name, mode, []byte("content"))
+}
+
+func makeZipWithContent(t *testing.T, name string, mode os.FileMode, content []byte) []byte {
 	t.Helper()
 	var output bytes.Buffer
 	writer := zip.NewWriter(&output)
@@ -154,7 +244,7 @@ func makeZip(t *testing.T, name string, mode os.FileMode) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := entry.Write([]byte("content")); err != nil {
+	if _, err := entry.Write(content); err != nil {
 		t.Fatal(err)
 	}
 	if err := writer.Close(); err != nil {

@@ -134,13 +134,26 @@ func (s *LocalArtifactStore) Put(ctx context.Context, src io.Reader, metadata As
 	return ref, nil
 }
 
+func isValidHexHash(hash string) bool {
+	if len(hash) != 64 {
+		return false
+	}
+	for i := 0; i < len(hash); i++ {
+		c := hash[i]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			return false
+		}
+	}
+	return true
+}
+
 // Open opens an immutable artifact for reading after verifying its content hash.
 func (s *LocalArtifactStore) Open(ctx context.Context, hash string) (io.ReadCloser, ArtifactRef, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, ArtifactRef{}, err
 	}
-	if len(hash) != 64 {
-		return nil, ArtifactRef{}, fmt.Errorf("publishing: invalid artifact hash length")
+	if !isValidHexHash(hash) {
+		return nil, ArtifactRef{}, fmt.Errorf("publishing: invalid artifact hash")
 	}
 
 	s.mu.RLock()
@@ -194,12 +207,20 @@ func (s *LocalArtifactStore) Promote(ctx context.Context, ref ArtifactRef, relPa
 	if clean == "." || clean == "" || strings.HasPrefix(clean, "../") || clean == ".." || filepath.IsAbs(relPath) {
 		return PublicationRef{}, ErrUnsafePath
 	}
-	if len(ref.SHA256) != 64 {
+	if !isValidHexHash(ref.SHA256) {
 		return PublicationRef{}, errors.New("publishing: invalid artifact reference for promotion")
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	artifactPath := s.artifactPath(ref.SHA256)
+	if _, err := os.Stat(artifactPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return PublicationRef{}, ErrNotFound
+		}
+		return PublicationRef{}, fmt.Errorf("publishing: stat artifact: %w", err)
+	}
 
 	targetPath := filepath.Join(s.root, "var", "portfolio", "publications", filepath.FromSlash(clean))
 	pubDir := filepath.Dir(targetPath)
@@ -253,8 +274,8 @@ func (s *LocalArtifactStore) DeletePreview(ctx context.Context, hash string) err
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if strings.TrimSpace(hash) == "" {
-		return nil
+	if !isValidHexHash(hash) {
+		return ErrUnsafePath
 	}
 
 	s.mu.Lock()

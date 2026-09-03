@@ -11,6 +11,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 )
@@ -141,7 +142,7 @@ func validateStaticArchive(content []byte) error {
 		if name == "" || strings.HasPrefix(name, "/") || clean == ".." || strings.HasPrefix(clean, "../") {
 			return fmt.Errorf("%w: path %q", ErrUnsafeArchive, file.Name)
 		}
-		if file.Mode()&0o170000 == 0o120000 || file.Mode()&0o111 != 0 {
+		if file.Mode()&os.ModeSymlink != 0 || file.Mode()&0o111 != 0 {
 			return fmt.Errorf("%w: non-static entry %q", ErrUnsafeArchive, file.Name)
 		}
 		if file.FileInfo().IsDir() {
