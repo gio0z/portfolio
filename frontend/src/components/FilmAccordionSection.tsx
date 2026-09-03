@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { ExternalLink, Play, Pause, ChevronLeft, ChevronRight, Film } from 'lucide-react';
+import { ArrowDownRight, ExternalLink, Play, Pause, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Project } from '../types';
 
 interface FilmAccordionProps {
@@ -40,11 +40,11 @@ export const FilmAccordionSection: React.FC<FilmAccordionProps> = ({ projects })
     sceneRef.current = scene;
 
     // 2. Camera Setup
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 0, 8.5);
+    const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 1000);
+    camera.position.set(0, 0, 9.0);
     cameraRef.current = camera;
 
-    // 3. WebGL Renderer
+    // 3. WebGL Renderer with Alpha Transparency
     const renderer = new THREE.WebGLRenderer({
       canvas: canvasRef.current,
       alpha: true,
@@ -56,99 +56,92 @@ export const FilmAccordionSection: React.FC<FilmAccordionProps> = ({ projects })
     rendererRef.current = renderer;
 
     // 4. Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
     scene.add(ambientLight);
 
-    const pointLight = new THREE.PointLight(0x3b82f6, 3, 20);
-    pointLight.position.set(0, 3, 6);
-    scene.add(pointLight);
+    const centerSpotLight = new THREE.SpotLight(0xffffff, 4, 30, Math.PI / 4, 0.3);
+    centerSpotLight.position.set(0, 4, 8);
+    scene.add(centerSpotLight);
 
-    const blueRimLight = new THREE.DirectionalLight(0x2563eb, 1.5);
-    blueRimLight.position.set(-5, 5, 4);
+    const blueRimLight = new THREE.DirectionalLight(0x3b82f6, 1.8);
+    blueRimLight.position.set(-6, 3, 5);
     scene.add(blueRimLight);
 
-    // 5. Build 3D Film Strip Panels (Canvas-based textures with sprocket holes)
-    const cardWidth = 3.2;
-    const cardHeight = 2.0;
-    const spacing = 3.7;
+    // 5. Continuous 3D Film Strip Ribbon Cards
+    // Dimensions chosen so adjacent cards connect smoothly
+    const cardWidth = 3.35;
+    const cardHeight = 2.05;
     const meshes: THREE.Mesh[] = [];
 
-    // Helper to generate a film frame texture with sprocket holes
-    const createFilmTexture = (imgUrl: string, title: string, index: number): THREE.CanvasTexture => {
+    // Helper: generate translucent film texture with continuous sprocket holes
+    const createTransparentFilmTexture = (imgUrl: string, title: string, category: string): THREE.CanvasTexture => {
       const c = document.createElement('canvas');
       c.width = 1024;
       c.height = 640;
       const ctx = c.getContext('2d')!;
 
-      // Background celluloid film color
-      ctx.fillStyle = '#10141e';
+      ctx.clearRect(0, 0, c.width, c.height);
+
+      // Translucent film body
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
       ctx.fillRect(0, 0, c.width, c.height);
 
-      // Sprocket holes border bars (Top & Bottom)
-      const sprocketBarHeight = 54;
-      ctx.fillStyle = '#060911';
-      ctx.fillRect(0, 0, c.width, sprocketBarHeight);
-      ctx.fillRect(0, c.height - sprocketBarHeight, c.width, sprocketBarHeight);
+      // Sprocket border rails (Top & Bottom)
+      const barH = 44;
+      ctx.fillStyle = 'rgba(6, 9, 17, 0.95)';
+      ctx.fillRect(0, 0, c.width, barH);
+      ctx.fillRect(0, c.height - barH, c.width, barH);
 
-      // Draw sprocket holes
-      const holeWidth = 26;
-      const holeHeight = 36;
-      const holeGap = 42;
-      const numHoles = Math.floor(c.width / holeGap);
+      // Cutout transparent sprocket holes perfectly centered
+      const notchW = 20;
+      const notchH = 26;
+      const notchGap = 40;
+      const totalNotches = Math.floor(c.width / notchGap);
 
-      ctx.fillStyle = '#f8f9fa';
-      for (let i = 0; i < numHoles; i++) {
-        const x = 16 + i * holeGap;
-        // Top hole
-        ctx.beginPath();
-        ctx.roundRect(x, 9, holeWidth, holeHeight, 6);
-        ctx.fill();
-
-        // Bottom hole
-        ctx.beginPath();
-        ctx.roundRect(x, c.height - sprocketBarHeight + 9, holeWidth, holeHeight, 6);
-        ctx.fill();
+      for (let i = 0; i < totalNotches; i++) {
+        const x = 12 + i * notchGap;
+        ctx.clearRect(x, 9, notchW, notchH);
+        ctx.clearRect(x, c.height - barH + 9, notchW, notchH);
       }
 
-      // Draw inner film frame placeholder while image loads
-      ctx.fillStyle = '#181f33';
-      ctx.fillRect(32, sprocketBarHeight + 12, c.width - 64, c.height - (sprocketBarHeight * 2) - 24);
+      // Card image area
+      ctx.fillStyle = 'rgba(30, 41, 59, 0.9)';
+      ctx.fillRect(20, barH + 8, c.width - 40, c.height - (barH * 2) - 16);
 
-      // Film frame counter
-      ctx.fillStyle = '#3b82f6';
-      ctx.font = 'bold 22px "JetBrains Mono", monospace';
-      ctx.fillText(`FRAME 0${index + 1} // 35MM REEL`, 48, sprocketBarHeight + 46);
+      // Category label
+      ctx.fillStyle = '#60a5fa';
+      ctx.font = '600 22px "Plus Jakarta Sans", sans-serif';
+      ctx.fillText(category.toUpperCase(), 40, barH + 44);
 
+      // Project Title
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 36px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText(title, 48, c.height - sprocketBarHeight - 32);
+      ctx.fillText(title, 40, c.height - barH - 28);
 
       const texture = new THREE.CanvasTexture(c);
 
-      // Load background image onto canvas
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.src = imgUrl;
       img.onload = () => {
-        // Draw image in central active area
-        ctx.drawImage(img, 32, sprocketBarHeight + 12, c.width - 64, c.height - (sprocketBarHeight * 2) - 24);
-        
-        // Add subtle film grain / dark gradient vignette
-        const gradient = ctx.createLinearGradient(0, sprocketBarHeight, 0, c.height - sprocketBarHeight);
-        gradient.addColorStop(0, 'rgba(6, 9, 17, 0.4)');
-        gradient.addColorStop(0.5, 'rgba(6, 9, 17, 0.1)');
-        gradient.addColorStop(1, 'rgba(6, 9, 17, 0.7)');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(32, sprocketBarHeight + 12, c.width - 64, c.height - (sprocketBarHeight * 2) - 24);
+        ctx.drawImage(img, 20, barH + 8, c.width - 40, c.height - (barH * 2) - 16);
 
-        // Re-render labels on top of image
-        ctx.fillStyle = '#38bdf8';
-        ctx.font = 'bold 24px "JetBrains Mono", monospace';
-        ctx.fillText(`FRAME 0${index + 1} // GIO0Z / ${projects[index]?.category || 'SYSTEMS'}`, 52, sprocketBarHeight + 48);
+        // Elegant gradient for text readability
+        const grad = ctx.createLinearGradient(0, barH, 0, c.height - barH);
+        grad.addColorStop(0, 'rgba(15, 23, 42, 0.35)');
+        grad.addColorStop(0.45, 'rgba(15, 23, 42, 0.05)');
+        grad.addColorStop(1, 'rgba(15, 23, 42, 0.8)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(20, barH + 8, c.width - 40, c.height - (barH * 2) - 16);
+
+        // Text overlay
+        ctx.fillStyle = '#93c5fd';
+        ctx.font = '600 22px "Plus Jakarta Sans", sans-serif';
+        ctx.fillText(category.toUpperCase(), 40, barH + 44);
 
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 38px "Plus Jakarta Sans", sans-serif';
-        ctx.fillText(title, 52, c.height - sprocketBarHeight - 34);
+        ctx.font = 'bold 36px "Plus Jakarta Sans", sans-serif';
+        ctx.fillText(title, 40, c.height - barH - 28);
 
         texture.needsUpdate = true;
       };
@@ -156,76 +149,78 @@ export const FilmAccordionSection: React.FC<FilmAccordionProps> = ({ projects })
       return texture;
     };
 
-    // Geometry: slightly segmented plane to allow accordion curvature
     const geometry = new THREE.PlaneGeometry(cardWidth, cardHeight, 16, 8);
 
-    projects.forEach((proj, idx) => {
-      const texture = createFilmTexture(proj.image, proj.title, idx);
+    projects.forEach((proj) => {
+      const texture = createTransparentFilmTexture(proj.image, proj.title, proj.category);
       const material = new THREE.MeshStandardMaterial({
         map: texture,
-        roughness: 0.25,
-        metalness: 0.1,
+        transparent: true,
+        opacity: 0.96,
+        roughness: 0.15,
+        metalness: 0.08,
         side: THREE.DoubleSide,
       });
 
       const mesh = new THREE.Mesh(geometry, material);
-      mesh.userData = { index: idx };
       scene.add(mesh);
       meshes.push(mesh);
     });
 
     meshesRef.current = meshes;
 
-    // 6. Animation Loop (Accordion Film Curve)
+    // 6. Unified Cylindrical Cinema Ribbon Motion
     let animationFrameId: number;
     let autoTime = 0;
+
+    // Circle radius & angular stride for seamless ribbon flow
+    const ribbonRadius = 6.2;
+    const angularStride = 0.54; // radians between card centers (~31 deg)
 
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
 
-      // Auto scroll if playing and not user dragging
       if (isPlayingRef.current && !isDraggingRef.current) {
-        autoTime += 0.003;
-        targetOffsetRef.current += 0.003;
+        autoTime += 0.0022;
+        targetOffsetRef.current += 0.0022;
       }
 
-      // Smooth damping lerp
       scrollOffsetRef.current += (targetOffsetRef.current - scrollOffsetRef.current) * 0.08;
 
       const total = projects.length;
       const centerPos = scrollOffsetRef.current;
 
-      // Position each film card in 3D space with an accordion wave
       meshes.forEach((mesh, idx) => {
         let relPos = ((idx - centerPos) % total);
         if (relPos < -total / 2) relPos += total;
         if (relPos > total / 2) relPos -= total;
 
-        const x = relPos * spacing;
-        
-        // Accordion 3D depth wave: closer when near center, folds backwards when away
-        const z = -Math.abs(relPos) * 0.9 + (Math.abs(relPos) < 0.6 ? 0.3 : 0);
-        
-        // Accordion rotation (like folded film reel / paper accordion)
-        const rotY = -relPos * 0.28;
-        const rotZ = Math.sin(relPos * 0.8) * 0.04;
+        // Position on a continuous smooth cylindrical arc
+        const theta = relPos * angularStride;
+        const x = ribbonRadius * Math.sin(theta);
+        const z = ribbonRadius * (Math.cos(theta) - 1);
+        const rotY = theta; // Perfectly tangents the arc ribbon
+
+        // Subtle accordion ripple
+        const rotZ = Math.sin(relPos * 1.5) * 0.02;
 
         mesh.position.set(x, 0, z);
         mesh.rotation.set(0, rotY, rotZ);
 
-        // Highlight selected
-        const isNearCenter = Math.abs(relPos) < 0.5;
+        // Active center highlight
+        const isNearCenter = Math.abs(relPos) < 0.45;
         const mat = mesh.material as THREE.MeshStandardMaterial;
         if (isNearCenter) {
           mat.emissive.setHex(0x1d4ed8);
-          mat.emissiveIntensity = 0.25;
+          mat.emissiveIntensity = 0.28;
+          mesh.scale.set(1.04, 1.04, 1.04);
         } else {
           mat.emissive.setHex(0x000000);
           mat.emissiveIntensity = 0.0;
+          mesh.scale.set(1.0, 1.0, 1.0);
         }
       });
 
-      // Update selected index in React state when active frame changes
       const currentActive = (Math.round(centerPos) % total + total) % total;
       setSelectedIndex(currentActive);
 
@@ -234,7 +229,6 @@ export const FilmAccordionSection: React.FC<FilmAccordionProps> = ({ projects })
 
     animate();
 
-    // 7. Mouse/Touch Drag Interactivity
     const handleResize = () => {
       if (!containerRef.current || !renderer || !camera) return;
       const w = containerRef.current.clientWidth;
@@ -257,7 +251,6 @@ export const FilmAccordionSection: React.FC<FilmAccordionProps> = ({ projects })
     };
   }, [projects]);
 
-  // Drag handlers
   const handlePointerDown = (e: React.PointerEvent) => {
     isDraggingRef.current = true;
     startXRef.current = e.clientX;
@@ -266,14 +259,13 @@ export const FilmAccordionSection: React.FC<FilmAccordionProps> = ({ projects })
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDraggingRef.current) return;
-    const deltaX = (e.clientX - startXRef.current) / 240;
+    const deltaX = (e.clientX - startXRef.current) / 220;
     targetOffsetRef.current = prevOffsetRef.current - deltaX;
   };
 
   const handlePointerUp = () => {
     if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
-    // Snap to nearest frame
     targetOffsetRef.current = Math.round(targetOffsetRef.current);
   };
 
@@ -284,34 +276,33 @@ export const FilmAccordionSection: React.FC<FilmAccordionProps> = ({ projects })
   const activeProject = projects[selectedIndex] || projects[0];
 
   return (
-    <section id="projects" className="py-24 sm:py-32 px-4 sm:px-8 max-w-7xl mx-auto overflow-hidden">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
+    <section id="projects" className="pt-24 sm:pt-32 pb-24 sm:pb-32 px-4 sm:px-8 max-w-7xl mx-auto overflow-hidden scroll-mt-24">
+      {/* Header: Clean & Natural matching the reference style */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
         <div>
           <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-wider uppercase text-zinc-500 mb-4 font-mono">
             <span className="flex items-center justify-center w-4 h-4 rounded bg-blue-600 text-white">
-              <Film className="w-3 h-3" />
+              <ArrowDownRight className="w-3 h-3" />
             </span>
-            <span>Real Repositories from GitHub /gio0z</span>
+            <span>Case Studies</span>
           </div>
           <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-zinc-900 leading-[1.1]">
-            <span>Interactive 3D</span> <br />
-            <span className="text-zinc-400 font-bold">Film Reel Showcase</span>
+            <span>Featured</span> <br />
+            <span className="text-zinc-400 font-bold">Engineering Work</span>
           </h2>
         </div>
 
-        {/* Film Controls Bar */}
-        <div className="flex items-center gap-3 bg-[#18181B] text-white px-5 py-2.5 rounded-full shadow-lg border border-white/10">
-          <div className="flex items-center gap-2 text-xs font-mono text-blue-400">
-            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-            <span>FRAME {selectedIndex + 1} / {projects.length}</span>
+        {/* Minimal Reel Controls */}
+        <div className="flex items-center gap-3 bg-[#18181B] text-white px-4 py-2 rounded-full shadow-lg border border-white/10">
+          <div className="text-xs font-mono text-blue-400">
+            {selectedIndex + 1} / {projects.length}
           </div>
 
-          <div className="h-4 w-px bg-zinc-700 mx-1" />
+          <div className="h-3.5 w-px bg-zinc-700 mx-1" />
 
           <button
             onClick={() => jumpToFrame(selectedIndex - 1)}
-            aria-label="Previous frame"
+            aria-label="Previous"
             className="p-1 hover:text-blue-400 transition-colors cursor-pointer"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -319,15 +310,15 @@ export const FilmAccordionSection: React.FC<FilmAccordionProps> = ({ projects })
 
           <button
             onClick={() => setIsPlaying(!isPlaying)}
-            aria-label={isPlaying ? 'Pause film' : 'Play film'}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
             className="p-1 text-zinc-300 hover:text-white transition-colors cursor-pointer"
           >
-            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
           </button>
 
           <button
             onClick={() => jumpToFrame(selectedIndex + 1)}
-            aria-label="Next frame"
+            aria-label="Next"
             className="p-1 hover:text-blue-400 transition-colors cursor-pointer"
           >
             <ChevronRight className="w-4 h-4" />
@@ -335,46 +326,27 @@ export const FilmAccordionSection: React.FC<FilmAccordionProps> = ({ projects })
         </div>
       </div>
 
-      {/* 3D Three.js Film Strip Canvas Container */}
+      {/* Transparent 3D Continuous Film Ribbon Canvas */}
       <div
         ref={containerRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
-        className="w-full relative h-[480px] bg-[#0c101c] rounded-[32px] overflow-hidden border border-zinc-800 shadow-2xl cursor-grab active:cursor-grabbing select-none"
+        className="w-full relative h-[480px] rounded-[32px] overflow-hidden cursor-grab active:cursor-grabbing select-none bg-transparent"
       >
         <canvas ref={canvasRef} className="w-full h-full block" />
-
-        {/* Cinematic Film Overlay Badges */}
-        <div className="absolute top-4 left-6 pointer-events-none flex items-center gap-3">
-          <span className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-[11px] font-mono text-blue-400 border border-blue-500/30">
-            35MM CELLULOID REEL
-          </span>
-          <span className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-[11px] font-mono text-zinc-400 border border-white/10">
-            DRAG OR CLICK TO ROTATE
-          </span>
-        </div>
-
-        <div className="absolute bottom-4 right-6 pointer-events-none text-right">
-          <span className="text-[11px] font-mono text-zinc-500 tracking-wider">
-            THREE.JS ACCORDION CAMERA // 60 FPS
-          </span>
-        </div>
       </div>
 
-      {/* Synchronized Project Synoptic Card (Active Film Frame Detail) */}
+      {/* Clean Project Detail Card below the film roll */}
       {activeProject && (
-        <div className="mt-8 bg-white rounded-[28px] p-8 sm:p-10 border border-zinc-200 shadow-xl transition-all duration-300">
+        <div className="mt-8 bg-white rounded-[28px] p-8 sm:p-10 border border-zinc-200/90 shadow-sm hover:shadow-xl transition-all duration-300">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            {/* Left: Info & Scope */}
+            {/* Left: Info */}
             <div className="lg:col-span-8">
               <div className="flex flex-wrap items-center gap-2 mb-3">
-                <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold">
+                <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold font-mono border border-blue-200/60">
                   {activeProject.category}
-                </span>
-                <span className="text-xs font-mono text-zinc-500">
-                  Frame 0{selectedIndex + 1} of {projects.length}
                 </span>
               </div>
 
@@ -390,17 +362,20 @@ export const FilmAccordionSection: React.FC<FilmAccordionProps> = ({ projects })
                 {activeProject.description}
               </p>
 
-              {/* Tech stack badges */}
-              <div className="flex flex-wrap gap-2 mb-4">
+              {/* Tags */}
+              <div className="flex flex-wrap gap-2">
                 {activeProject.tags.map((t) => (
-                  <span key={t} className="px-3 py-1 rounded-md bg-zinc-100 text-zinc-800 text-xs font-mono font-medium">
+                  <span
+                    key={t}
+                    className="px-3 py-1 rounded-md bg-zinc-100 text-zinc-700 text-xs font-mono font-medium"
+                  >
                     {t}
                   </span>
                 ))}
               </div>
             </div>
 
-            {/* Right: Metrics & Actions */}
+            {/* Right: Metrics & Link */}
             <div className="lg:col-span-4 bg-zinc-50 rounded-2xl p-6 border border-zinc-200/80 flex flex-col justify-between">
               <div>
                 <div className="text-xs font-mono uppercase text-zinc-400 mb-2 tracking-wider">
@@ -439,9 +414,8 @@ export const FilmAccordionSection: React.FC<FilmAccordionProps> = ({ projects })
             </div>
           </div>
 
-          {/* Quick Select Thumbnails Strip */}
-          <div className="mt-8 pt-6 border-t border-zinc-100 flex items-center gap-3 overflow-x-auto pb-2">
-            <span className="text-xs font-mono text-zinc-400 shrink-0 mr-2">FRAME SELECTOR:</span>
+          {/* Quick Select Buttons */}
+          <div className="mt-8 pt-6 border-t border-zinc-100 flex items-center gap-2 overflow-x-auto pb-2">
             {projects.map((p, idx) => (
               <button
                 key={p.id}
