@@ -55,7 +55,7 @@ export const CoverflowSection: React.FC<CoverflowProps> = ({ projects }) => {
   const activeProject = projects[currentIndex] || projects[0];
 
   return (
-    <section id="projects" className="py-24 sm:py-32 px-4 sm:px-8 max-w-7xl mx-auto overflow-hidden">
+    <section id="projects" className="pt-24 sm:pt-32 pb-24 sm:pb-32 px-4 sm:px-8 max-w-7xl mx-auto overflow-hidden scroll-mt-28">
       {/* Header: Clean Editorial Style */}
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
         <div>
@@ -67,7 +67,7 @@ export const CoverflowSection: React.FC<CoverflowProps> = ({ projects }) => {
           </div>
           <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-zinc-900 leading-[1.1]">
             <span>Featured</span> <br />
-            <span className="text-zinc-400 font-bold">Projects</span>
+            <span className="text-zinc-400 font-bold">Engineering Work</span>
           </h2>
         </div>
 
