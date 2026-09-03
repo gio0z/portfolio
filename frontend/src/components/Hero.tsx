@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Send, Terminal, Sparkles, ShieldCheck, Zap } from 'lucide-react';
+import { ArrowDownRight } from 'lucide-react';
 import type { Profile } from '../types';
 
 interface HeroProps {
@@ -8,108 +8,142 @@ interface HeroProps {
 
 export const Hero: React.FC<HeroProps> = ({ profile }) => {
   return (
-    <section id="about" className="relative pt-32 pb-20 md:pt-40 md:pb-28 overflow-hidden">
-      {/* Background Decorative Ambient Glows */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-blue-600/20 blur-[140px] rounded-full pointer-events-none -z-10" />
-      <div className="absolute top-20 right-10 w-[300px] h-[300px] bg-cyan-500/10 blur-[100px] rounded-full pointer-events-none -z-10" />
-      <div className="absolute top-40 left-10 w-[250px] h-[250px] bg-indigo-600/15 blur-[90px] rounded-full pointer-events-none -z-10" />
+    <section className="pt-12 sm:pt-20 pb-16 sm:pb-24 px-4 sm:px-8 max-w-7xl mx-auto">
+      {/* 1. Hero Text Header */}
+      <div className="text-center max-w-4xl mx-auto mb-16 sm:mb-20">
+        {/* Pre-title Eyebrow */}
+        <div className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold tracking-wider uppercase text-zinc-500 mb-6 font-mono">
+          <span className="flex items-center justify-center w-5 h-5 rounded-md bg-blue-600 text-white">
+            <ArrowDownRight className="w-3.5 h-3.5" />
+          </span>
+          <span>Welcome to Regio</span>
+        </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col items-center text-center max-w-4xl mx-auto">
-          {/* Top Pill / Status */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-950/70 border border-blue-800/40 text-blue-300 text-xs sm:text-sm font-medium mb-8 shadow-inner shadow-blue-500/10 backdrop-blur-md">
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+        {/* Monumental 3-Line Headline */}
+        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-zinc-900 leading-[1.08] mb-6">
+          <span>Your Next Best</span> <br />
+          <span className="inline-flex items-center gap-3">
+            <span>Engineering</span>
+            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/30">
+              <ArrowDownRight className="w-5 h-5 sm:w-8 sm:h-8" />
             </span>
-            <span className="text-slate-300 font-mono tracking-wide">ARCHITECTURE • DISTRIBUTED SYSTEMS • AI AGENTS</span>
-          </div>
+            <span className="text-zinc-400 font-bold">Decision</span>
+          </span> <br />
+          <span className="text-zinc-400 font-bold">Starts Here</span>
+        </h1>
 
-          {/* Main Headline */}
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white mb-6 leading-[1.15]">
-            Engineering Resilient <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-blue-400 via-sky-300 to-cyan-300 bg-clip-text text-transparent">
-              Backends & Autonomous Agents
-            </span>
-          </h1>
+        {/* Supporting Paragraph */}
+        <p className="text-base sm:text-lg text-zinc-600 max-w-2xl mx-auto leading-relaxed">
+          I'm a full-stack engineer and AI systems architect helping businesses grow through resilient Go backends, reactive Vite frontends, and autonomous multi-agent pipelines. Browse my work — the numbers do the talking.
+        </p>
+      </div>
 
-          {/* Subtitle */}
-          <p className="text-base sm:text-xl text-slate-300 mb-10 max-w-2xl font-normal leading-relaxed">
-            I'm <span className="text-white font-semibold">{profile?.name || 'Regio Dani Pangestu'}</span>. 
-            I architect high-concurrency Go microservices, lightning-fast reactive web frontends with Vite, 
-            and self-improving multi-agent workflows built on disciplined engineering standards.
-          </p>
-
-          {/* CTAs */}
-          <div className="flex flex-wrap items-center justify-center gap-4 mb-16 w-full sm:w-auto">
-            <a
-              href="#projects"
-              className="flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 hover:from-blue-500 hover:to-blue-600 text-white font-semibold text-sm shadow-xl shadow-blue-700/30 hover:shadow-blue-600/50 hover:-translate-y-0.5 transition-all duration-200 w-full sm:w-auto"
-            >
-              <span>Explore Selected Work</span>
-              <ArrowRight className="w-4 h-4" />
-            </a>
-
-            <a
-              href="https://github.com/gio0z"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-slate-900/80 hover:bg-slate-800/80 border border-blue-900/40 hover:border-blue-700/60 text-slate-200 hover:text-white font-semibold text-sm backdrop-blur-md transition-all duration-200 w-full sm:w-auto shadow-md"
-            >
-              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-              </svg>
-              <span>GitHub /gio0z</span>
-            </a>
-
-            <a
-              href="#contact"
-              className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-blue-950/40 hover:bg-blue-900/40 border border-blue-800/30 text-blue-300 hover:text-blue-200 font-semibold text-sm transition-all duration-200 w-full sm:w-auto"
-            >
-              <Send className="w-4 h-4" />
-              <span>Contact Direct</span>
-            </a>
-          </div>
-
-          {/* Quick Technical Badges */}
-          <div className="flex flex-wrap justify-center items-center gap-2.5 text-xs text-slate-400 font-mono mb-16">
-            <span className="text-slate-500">Core Stack:</span>
-            {['Go (Golang)', 'Vite', 'React 19', 'TypeScript', 'Tailwind v4', 'Hermes Agent', 'Docker', 'PostgreSQL'].map((tech) => (
-              <span key={tech} className="px-2.5 py-1 rounded-md bg-slate-900/70 border border-blue-900/30 text-blue-300">
-                {tech}
+      {/* 2. Split Two-Column Feature Cards (50/50 Bento Grid) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
+        {/* Left Column: Dark Pitch Card */}
+        <div className="lg:col-span-6 bg-[#18181B] text-white rounded-[32px] p-8 sm:p-12 flex flex-col justify-between shadow-xl relative overflow-hidden border border-white/5">
+          {/* Top Tag & Header */}
+          <div>
+            <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide uppercase text-zinc-400 mb-6 font-mono">
+              <span className="flex items-center justify-center w-4 h-4 rounded bg-blue-600 text-white">
+                <ArrowDownRight className="w-3 h-3" />
               </span>
-            ))}
+              <span>About the engineer</span>
+            </div>
+
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.1] mb-6">
+              <span>Systems first.</span> <br />
+              <span className="text-zinc-500 font-bold">Always.</span>
+            </h2>
+
+            <p className="text-zinc-400 text-sm sm:text-base leading-relaxed mb-8 max-w-xl">
+              I lead projects of high-concurrency distributed backends and reactive web frontends from a clear foundation, combining strict performance criteria and visual sensitivity to build systems coherent and durable.
+            </p>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center gap-3 mb-10">
+              <a
+                href="#about"
+                className="flex items-center gap-2 px-6 py-3 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs sm:text-sm shadow-md shadow-blue-600/30 transition-all duration-200"
+              >
+                <span>More About Me</span>
+                <ArrowDownRight className="w-4 h-4" />
+              </a>
+
+              <a
+                href="#projects"
+                className="flex items-center gap-2 px-6 py-3 rounded-full bg-white hover:bg-zinc-100 text-zinc-900 font-semibold text-xs sm:text-sm shadow-md transition-all duration-200"
+              >
+                <span>See Projects</span>
+                <ArrowDownRight className="w-4 h-4" />
+              </a>
+            </div>
+          </div>
+
+          {/* Embedded Highlight Card (Bottom) */}
+          <div className="bg-[#242428] rounded-2xl p-4 sm:p-5 flex items-center gap-4 border border-white/10 hover:border-blue-500/40 transition-colors group">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shrink-0 bg-zinc-800">
+              <img
+                src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=300&q=80"
+                alt="Highlight case study"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold text-white group-hover:text-blue-400 transition-colors line-clamp-2 leading-snug mb-1">
+                Increasing Microservice Concurrency from 10K to 50K RPS
+              </div>
+              <a
+                href="#projects"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                <span>See Details</span>
+                <ArrowDownRight className="w-3.5 h-3.5" />
+              </a>
+            </div>
           </div>
         </div>
 
-        {/* Stats Grid Bar (Glass Cards) */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto">
-          {profile?.stats ? (
-            profile.stats.map((stat, idx) => (
-              <div
-                key={stat.label}
-                className="p-5 rounded-2xl bg-[#0b1329]/70 border border-blue-900/30 backdrop-blur-md hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-900/20 transition-all duration-300 group"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-mono uppercase tracking-wider text-slate-400 group-hover:text-blue-400 transition-colors">
-                    {stat.label}
-                  </span>
-                  {idx === 0 && <Terminal className="w-4 h-4 text-blue-400" />}
-                  {idx === 1 && <Zap className="w-4 h-4 text-cyan-400" />}
-                  {idx === 2 && <ShieldCheck className="w-4 h-4 text-emerald-400" />}
-                  {idx === 3 && <Sparkles className="w-4 h-4 text-sky-400" />}
-                </div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-1 group-hover:text-blue-200 transition-colors">
-                  {stat.value}
-                </div>
-                <div className="text-xs text-slate-400 truncate">
-                  {stat.sub}
-                </div>
+        {/* Right Column: Photograph & Floating Metric Overlays */}
+        <div className="lg:col-span-6 relative rounded-[32px] overflow-hidden min-h-[500px] sm:min-h-[600px] flex flex-col justify-end p-4 sm:p-6 shadow-xl bg-zinc-200">
+          {/* Strategist / Engineer Photo */}
+          <img
+            src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=80"
+            alt={profile?.name || 'Regio Dani Pangestu'}
+            className="absolute inset-0 w-full h-full object-cover object-top"
+          />
+
+          {/* Subtle bottom shadow overlay to guarantee metric card readability */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
+
+          {/* Floating Metric Badges Cluster (2 Cards Side-by-Side) */}
+          <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+            {/* Metric 1 */}
+            <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-5 shadow-2xl border border-black/5">
+              <div className="text-3xl sm:text-4xl font-extrabold text-zinc-900 tracking-tight mb-1">
+                3.8<span className="text-blue-600 font-bold">x</span>
               </div>
-            ))
-          ) : (
-            <div className="col-span-4 text-center py-4 text-slate-500 text-sm">Loading telemetry...</div>
-          )}
+              <div className="text-xs font-medium text-zinc-600 mb-2 leading-tight">
+                Throughput efficiency across all Go microservices
+              </div>
+              <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md font-mono">
+                <span>↑ 64% above industry avg</span>
+              </div>
+            </div>
+
+            {/* Metric 2 */}
+            <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-5 shadow-2xl border border-black/5">
+              <div className="text-3xl sm:text-4xl font-extrabold text-zinc-900 tracking-tight mb-1">
+                +240<span className="text-blue-600 font-bold">%</span>
+              </div>
+              <div className="text-xs font-medium text-zinc-600 mb-2 leading-tight">
+                Velocity gain via TDD · average 6 months
+              </div>
+              <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md font-mono">
+                <span>↑ Sub-50ms p99 latency</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
