@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"portfolio/internal/adminapi"
+	"portfolio/internal/adminauth"
 	"portfolio/internal/publicapi"
 	"portfolio/internal/publishing"
 	"portfolio/pkg/api"
@@ -264,5 +266,203 @@ func TestServerWithRepositoryIntegration(t *testing.T) {
 	}
 	if len(dlList) != 1 || dlList[0].Slug != "awesome-redesign" {
 		t.Fatalf("expected 1 featured project in design-lab, got %d", len(dlList))
+	}
+}
+
+type fakeServerPublisher struct{}
+
+func (f *fakeServerPublisher) Publish(ctx context.Context, req publishing.PublicationRequest) (publishing.PublicationOutput, error) {
+	return publishing.PublicationOutput{
+		LabURL:          "https://lab.gio0z.dev/" + req.Project.Slug,
+		PortfolioURL:    "https://gio0z.dev/design-lab/" + req.Project.Slug,
+		DeploymentIDs:   []string{"dep-srv-1"},
+		DestinationURLs: []string{"https://lab.gio0z.dev/" + req.Project.Slug},
+	}, nil
+}
+
+func TestServerAdminEndpointsIntegration(t *testing.T) {
+	// 1. Unconfigured server returns 401 for admin routes
+	srvUnconfigured := api.NewServer()
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/overview", nil)
+	rr := httptest.NewRecorder()
+	srvUnconfigured.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("unconfigured admin overview expected 401, got %d", rr.Code)
+	}
+
+	// 2. Configure publishing service, repository, and admin auth
+	db, err := publishing.OpenRegistry(":memory:")
+	if err != nil {
+		t.Fatalf("OpenRegistry: %v", err)
+	}
+	defer db.Close()
+
+	repo := publishing.NewSQLiteRepository(db)
+	store := publishing.NewLocalArtifactStore(t.TempDir(), publishing.AssetPolicy{MaxBytes: 10 * 1024 * 1024})
+	pubSvc := publishing.NewPublishingService(repo, store, &fakeServerPublisher{})
+
+	authCfg := adminauth.Config{
+		ClientID:         "srv-client-id",
+		ClientSecret:     "srv-client-secret",
+		SessionSecret:    "srv-session-key-must-be-32-chars-long!",
+		AllowedLogin:     "gio0z",
+		Environment:      "development",
+		ApprovalVerifier: adminauth.NewDevApprovalVerifier("development"),
+		SecureCookies:    false,
+		SessionStore:     adminauth.NewMemorySessionStore(),
+	}
+	authSvc, err := adminauth.NewService(authCfg)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	srv := api.NewServer(api.WithPublishing(pubSvc, repo, authSvc))
+
+	// Test CORS headers on OPTIONS
+	optReq := httptest.NewRequest(http.MethodOptions, "/api/admin/overview", nil)
+	optRR := httptest.NewRecorder()
+	srv.ServeHTTP(optRR, optReq)
+	if optRR.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for OPTIONS, got %d", optRR.Code)
+	}
+	if !strings.Contains(optRR.Header().Get("Access-Control-Allow-Headers"), "X-Request-ID") {
+		t.Errorf("CORS headers missing X-Request-ID: %s", optRR.Header().Get("Access-Control-Allow-Headers"))
+	}
+
+	// Unauthenticated request returns 401
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/overview", nil)
+	rr = httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unauthenticated request, got %d", rr.Code)
+	}
+
+	// Create owner session
+	sess, token, err := authSvc.CreateSession("gio0z")
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	csrfToken, err := authSvc.IssueCSRFToken(sess.ID)
+	if err != nil {
+		t.Fatalf("IssueCSRFToken: %v", err)
+	}
+
+	ownerCookie := &http.Cookie{
+		Name:  adminauth.SessionCookieName,
+		Value: token,
+	}
+
+	// Authenticated request to overview
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/overview", nil)
+	req.AddCookie(ownerCookie)
+	rr = httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for authenticated overview, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+
+	var overview adminapi.OverviewResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &overview); err != nil {
+		t.Fatalf("decode overview: %v", err)
+	}
+
+	// Seed a submission in review
+	ctx := context.Background()
+	now := time.Now().UTC()
+	proj := publishing.LabProject{
+		ID:              "proj-srv-1",
+		Slug:            "srv-slug-1",
+		Title:           "Srv Project",
+		OriginalProduct: "Legacy Product",
+		Disclaimer:      publishing.MandatoryDisclaimer,
+		Status:          "DRAFT",
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	if err := repo.CreateLabProject(ctx, proj); err != nil {
+		t.Fatalf("CreateLabProject: %v", err)
+	}
+	artRef, err := store.Put(ctx, strings.NewReader("<html>Server Test</html>"), publishing.AssetMetadata{
+		Name:     "index.html",
+		MIMEType: "text/html",
+	})
+	if err != nil {
+		t.Fatalf("Put artifact: %v", err)
+	}
+	sub := publishing.Submission{
+		ID:                 "sub-srv-1",
+		LabProjectID:       proj.ID,
+		Revision:           1,
+		State:              publishing.InReview,
+		ArtifactSHA256:     artRef.SHA256,
+		PreviewURL:         "https://preview.example.com",
+		BuildResult:        "passed",
+		TestResult:         "passed",
+		SecurityScanResult: "passed",
+		SubmittedBy:        "agent-claude",
+		SubmittedAt:        now,
+		UpdatedAt:          now,
+	}
+	if err := repo.CreateSubmission(ctx, sub); err != nil {
+		t.Fatalf("CreateSubmission: %v", err)
+	}
+
+	// GET /api/admin/reviews
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/reviews", nil)
+	req.AddCookie(ownerCookie)
+	rr = httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for /api/admin/reviews, got %d", rr.Code)
+	}
+	var reviews []adminapi.ReviewQueueItem
+	if err := json.Unmarshal(rr.Body.Bytes(), &reviews); err != nil {
+		t.Fatalf("decode reviews: %v", err)
+	}
+	if len(reviews) != 1 || reviews[0].ID != "sub-srv-1" {
+		t.Fatalf("expected 1 review item, got %d", len(reviews))
+	}
+
+	// GET /api/admin/reviews/{id}
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/reviews/sub-srv-1", nil)
+	req.AddCookie(ownerCookie)
+	rr = httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for /api/admin/reviews/{id}, got %d", rr.Code)
+	}
+
+	// Mutation without CSRF token returns 403
+	req = httptest.NewRequest(http.MethodPost, "/api/admin/reviews/sub-srv-1/request-changes", strings.NewReader(`{"reason":"needs work"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Request-ID", "req-srv-1")
+	req.AddCookie(ownerCookie)
+	rr = httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden without CSRF, got %d", rr.Code)
+	}
+
+	// Mutation without X-Request-ID returns 400
+	req = httptest.NewRequest(http.MethodPost, "/api/admin/reviews/sub-srv-1/request-changes", strings.NewReader(`{"reason":"needs work"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(adminauth.CSRFHeaderName, csrfToken)
+	req.AddCookie(ownerCookie)
+	rr = httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request without X-Request-ID, got %d", rr.Code)
+	}
+
+	// Valid mutation succeeds
+	req = httptest.NewRequest(http.MethodPost, "/api/admin/reviews/sub-srv-1/request-changes", strings.NewReader(`{"reason":"needs work"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(adminauth.CSRFHeaderName, csrfToken)
+	req.Header.Set("X-Request-ID", "req-srv-2")
+	req.AddCookie(ownerCookie)
+	rr = httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for request-changes, got %d. Body: %s", rr.Code, rr.Body.String())
 	}
 }

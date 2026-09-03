@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"portfolio/internal/adminapi"
+	"portfolio/internal/adminauth"
 	"portfolio/internal/publicapi"
 	"portfolio/internal/publishing"
 )
@@ -18,6 +20,9 @@ type Server struct {
 	submissions   []ContactSubmission
 	mu            sync.RWMutex
 	publicHandler *publicapi.Handler
+	adminHandler  *adminapi.Handler
+	adminAuth     *adminauth.Service
+	adminSubMux   http.Handler
 }
 
 // WithRepository configures the server with a publishing repository for public lab endpoints.
@@ -31,6 +36,42 @@ func WithRepository(repo publishing.Repository) ServerOption {
 func WithPublicAPIReader(reader publicapi.ProjectReader) ServerOption {
 	return func(s *Server) {
 		s.publicHandler = publicapi.NewHandler(reader)
+	}
+}
+
+// WithAdminAPI configures the server with an admin API handler and authentication service.
+func WithAdminAPI(handler *adminapi.Handler, auth *adminauth.Service) ServerOption {
+	return func(s *Server) {
+		s.adminHandler = handler
+		s.adminAuth = auth
+		if handler != nil {
+			s.adminSubMux = handler.Routes(auth)
+		}
+	}
+}
+
+// WithPublishing configures the server with full public and admin publishing services.
+func WithPublishing(service publishing.PublishingService, repo publishing.Repository, auth *adminauth.Service) ServerOption {
+	return func(s *Server) {
+		s.publicHandler = publicapi.NewHandlerWithRepo(repo)
+		s.adminHandler = adminapi.NewHandler(service, repo)
+		s.adminAuth = auth
+		if s.adminHandler != nil {
+			s.adminSubMux = s.adminHandler.Routes(auth)
+		}
+	}
+}
+
+// SetAdminAPI dynamically updates the administrative API handler and authentication service.
+func (s *Server) SetAdminAPI(handler *adminapi.Handler, auth *adminauth.Service) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.adminHandler = handler
+	s.adminAuth = auth
+	if handler != nil {
+		s.adminSubMux = handler.Routes(auth)
+	} else {
+		s.adminSubMux = nil
 	}
 }
 
@@ -67,7 +108,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// CORS headers for Vite frontend integration
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-Request-ID, X-CSRF-Token, CSRF-Token, Idempotency-Key, X-Admin-StepUp-Dev, X-Admin-Passkey-Assertion")
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
@@ -115,6 +156,25 @@ func (s *Server) routes() {
 			publicapi.NewHandler(nil).HandlePortfolioDesignLab(w, r)
 		}
 	})
+
+	// Admin Review, Publishing, and Audit endpoints
+	adminDelegate := func(w http.ResponseWriter, r *http.Request) {
+		s.mu.RLock()
+		subMux := s.adminSubMux
+		s.mu.RUnlock()
+
+		if subMux == nil {
+			http.Error(w, "unauthorized: admin service not configured", http.StatusUnauthorized)
+			return
+		}
+		subMux.ServeHTTP(w, r)
+	}
+
+	s.mux.HandleFunc("/api/admin/overview", adminDelegate)
+	s.mux.HandleFunc("/api/admin/reviews", adminDelegate)
+	s.mux.HandleFunc("/api/admin/reviews/", adminDelegate)
+	s.mux.HandleFunc("/api/admin/projects/", adminDelegate)
+	s.mux.HandleFunc("/api/admin/audit", adminDelegate)
 }
 
 func jsonResponse(w http.ResponseWriter, status int, data interface{}) {

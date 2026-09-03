@@ -19,6 +19,19 @@ type ProjectFilter struct {
 	Featured *bool
 }
 
+// SubmissionFilter filters submissions returned by ListSubmissions.
+type SubmissionFilter struct {
+	State        SubmissionState
+	LabProjectID string
+}
+
+// AuditFilter filters audit events returned by ListAuditEvents.
+type AuditFilter struct {
+	Limit        int
+	SubmissionID string
+	ProjectID    string
+}
+
 // OperationResult is the durable response associated with an idempotency key.
 type OperationResult struct {
 	Code       string          `json:"code"`
@@ -59,5 +72,7 @@ type Repository interface {
 	GetIdempotencyResult(context.Context, string) (*OperationResult, error)
 	RecordIdempotencyResult(context.Context, string, OperationResult) error
 	AppendAudit(context.Context, AuditEvent) error
+	ListSubmissions(context.Context, SubmissionFilter) ([]Submission, error)
+	ListAuditEvents(context.Context, AuditFilter) ([]AuditEvent, error)
 	WithTx(context.Context, func(Repository) error) error
 }

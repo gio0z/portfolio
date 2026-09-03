@@ -309,6 +309,81 @@ func (r *SQLiteRepository) AppendAudit(ctx context.Context, event AuditEvent) er
 	return nil
 }
 
+func (r *SQLiteRepository) ListSubmissions(ctx context.Context, filter SubmissionFilter) ([]Submission, error) {
+	query := `SELECT s.id, s.lab_project_id, s.revision, s.state, s.artifact_sha256,
+		s.preview_url, s.build_result, s.test_result, s.security_scan_result,
+		s.portfolio_metadata_json, s.submitted_by, s.submitted_at, s.updated_at
+		FROM submissions s
+		WHERE s.revision = (SELECT MAX(s2.revision) FROM submissions s2 WHERE s2.id = s.id)`
+	var args []any
+	if filter.State != "" {
+		query += ` AND s.state = ?`
+		args = append(args, filter.State)
+	}
+	if filter.LabProjectID != "" {
+		query += ` AND s.lab_project_id = ?`
+		args = append(args, filter.LabProjectID)
+	}
+	query += ` ORDER BY s.updated_at DESC, s.id ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("publishing: list submissions: %w", err)
+	}
+	defer rows.Close()
+
+	var submissions []Submission
+	for rows.Next() {
+		sub, err := scanSubmission(rows)
+		if err != nil {
+			return nil, err
+		}
+		submissions = append(submissions, sub)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("publishing: list submissions: %w", err)
+	}
+	return submissions, nil
+}
+
+func (r *SQLiteRepository) ListAuditEvents(ctx context.Context, filter AuditFilter) ([]AuditEvent, error) {
+	query := `SELECT event_json, request_id, timestamp FROM audit_events ORDER BY sequence DESC`
+	var args []any
+	if filter.Limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, filter.Limit)
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("publishing: list audit events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []AuditEvent
+	for rows.Next() {
+		var raw, reqID, timestamp string
+		if err := rows.Scan(&raw, &reqID, &timestamp); err != nil {
+			return nil, fmt.Errorf("publishing: scan audit event: %w", err)
+		}
+		var evt AuditEvent
+		if err := json.Unmarshal([]byte(raw), &evt); err != nil {
+			return nil, fmt.Errorf("publishing: unmarshal audit event: %w", err)
+		}
+		if filter.SubmissionID != "" && evt.SubmissionID != filter.SubmissionID {
+			continue
+		}
+		if filter.ProjectID != "" && evt.ProjectID != filter.ProjectID {
+			continue
+		}
+		events = append(events, evt)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("publishing: list audit events: %w", err)
+	}
+	return events, nil
+}
+
 func (r *SQLiteRepository) WithTx(ctx context.Context, fn func(Repository) error) (err error) {
 	db, ok := r.db.(*sql.DB)
 	if !ok {
