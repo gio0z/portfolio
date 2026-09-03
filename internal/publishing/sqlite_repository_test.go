@@ -173,7 +173,7 @@ func TestSQLiteAuditIsAppendOnlyAndOrdered(t *testing.T) {
 	if !reflect.DeepEqual(ids, []string{"request-1", "request-2"}) {
 		t.Fatalf("audit order = %#v", ids)
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE audit_events SET result = 'changed' WHERE request_id = 'request-1'`); err == nil {
+	if _, err := db.ExecContext(ctx, `UPDATE audit_events SET request_id = 'changed' WHERE request_id = 'request-1'`); err == nil {
 		t.Fatal("audit update succeeded, want append-only rejection")
 	}
 	if _, err := db.ExecContext(ctx, `DELETE FROM audit_events WHERE request_id = 'request-1'`); err == nil {

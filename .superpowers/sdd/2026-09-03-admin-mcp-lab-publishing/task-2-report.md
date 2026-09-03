@@ -61,3 +61,55 @@ Checked every brief requirement against the implementation. Queries use placehol
 ## Concerns
 
 - `modernc.org/sqlite@latest` currently forces Go 1.25. This follows the brief's exact dependency command but raises the repository's minimum Go version from 1.23.
+
+## Fix Round — Go 1.23 Compatibility and Audit Test
+
+### Changes
+
+- Restored the module directive to `go 1.23.0`.
+- Pinned `modernc.org/sqlite v1.38.2` and regenerated `go.sum` with its Go 1.23-compatible transitive dependency graph.
+- Corrected the audit immutability test to update the real `request_id` column, ensuring the append-only trigger—not a nonexistent-column error—rejects the mutation.
+
+### Verification
+
+Installed and used Go 1.23.12 to verify the requested compatibility target.
+
+```text
+$ /home/gio/go/bin/go1.23.12 test ./internal/publishing -run SQLite -v
+=== RUN   TestSQLiteProjectPersistenceAndFiltering
+--- PASS: TestSQLiteProjectPersistenceAndFiltering (0.00s)
+=== RUN   TestSQLiteSubmissionRevisionConflictAndStatePersistence
+--- PASS: TestSQLiteSubmissionRevisionConflictAndStatePersistence (0.00s)
+=== RUN   TestSQLiteIdempotencyLookupAndDuplicate
+--- PASS: TestSQLiteIdempotencyLookupAndDuplicate (0.00s)
+=== RUN   TestSQLiteApprovalBindsSubmissionRevisionAndArtifactHash
+--- PASS: TestSQLiteApprovalBindsSubmissionRevisionAndArtifactHash (0.00s)
+=== RUN   TestSQLiteAuditIsAppendOnlyAndOrdered
+--- PASS: TestSQLiteAuditIsAppendOnlyAndOrdered (0.00s)
+=== RUN   TestSQLiteWithTxRollsBackAllMutations
+--- PASS: TestSQLiteWithTxRollsBackAllMutations (0.00s)
+PASS
+ok  portfolio/internal/publishing  0.014s
+
+$ /home/gio/go/bin/go1.23.12 test -race ./internal/publishing
+ok  portfolio/internal/publishing  1.116s
+
+$ /home/gio/go/bin/go1.23.12 test ./...
+?   portfolio  [no test files]
+ok  portfolio/internal/publishing  0.015s
+ok  portfolio/pkg/api  0.003s
+
+$ /home/gio/go/bin/go1.23.12 vet ./...
+[no output; exit 0]
+```
+
+### Changed Files
+
+- `go.mod`
+- `go.sum`
+- `internal/publishing/sqlite_repository_test.go`
+- `.superpowers/sdd/2026-09-03-admin-mcp-lab-publishing/task-2-report.md`
+
+### Concerns
+
+None. The selected SQLite release and every module in the resolved build list declare Go 1.23 or earlier.
