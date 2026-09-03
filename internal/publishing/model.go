@@ -37,7 +37,9 @@ type PortfolioMetadata map[string]any
 
 // ArtifactRef identifies immutable reviewed content.
 type ArtifactRef struct {
-	SHA256 string `json:"sha256"`
+	SHA256   string `json:"sha256"`
+	MIMEType string `json:"mime_type,omitempty"`
+	Size     int64  `json:"size,omitempty"`
 }
 
 // Submission is one revision of a proposed Lab Project publication.
