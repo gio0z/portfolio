@@ -67,6 +67,25 @@ func TestSQLiteProjectPersistenceAndFiltering(t *testing.T) {
 	if _, err := repo.GetLabProject(ctx, "missing"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("GetLabProject(missing) error = %v, want ErrNotFound", err)
 	}
+
+	// Update project
+	want.Title = "Updated Title"
+	want.UpdatedAt = want.UpdatedAt.Add(time.Minute)
+	if err := repo.UpdateLabProject(ctx, want); err != nil {
+		t.Fatalf("UpdateLabProject() error = %v", err)
+	}
+	gotUpdated, err := repo.GetLabProject(ctx, want.ID)
+	if err != nil {
+		t.Fatalf("GetLabProject() after update error = %v", err)
+	}
+	if gotUpdated.Title != "Updated Title" {
+		t.Fatalf("gotUpdated.Title = %q, want %q", gotUpdated.Title, "Updated Title")
+	}
+	missingProj := want
+	missingProj.ID = "non-existent"
+	if err := repo.UpdateLabProject(ctx, missingProj); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("UpdateLabProject(non-existent) error = %v, want ErrNotFound", err)
+	}
 }
 
 func TestSQLiteSubmissionRevisionConflictAndStatePersistence(t *testing.T) {

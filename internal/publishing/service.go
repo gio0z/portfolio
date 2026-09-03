@@ -8,12 +8,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"time"
 )
 
 // MandatoryDisclaimer is the required disclaimer for all lab projects.
 const MandatoryDisclaimer = "Independent redesign concept. Not affiliated with or endorsed by the original company."
+
+var slugRegex = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 // CreateDraftInput describes the initial metadata and proposed design lab project.
 type CreateDraftInput struct {
@@ -32,16 +35,13 @@ type CreateDraftInput struct {
 
 // UpdateDraftInput contains modifications to an existing submission.
 type UpdateDraftInput struct {
-	SubmissionID       string            `json:"submission_id"`
-	Title              string            `json:"title,omitempty"`
-	ArtifactSHA256     string            `json:"artifact_sha256,omitempty"`
-	PreviewURL         string            `json:"preview_url,omitempty"`
-	BuildResult        string            `json:"build_result,omitempty"`
-	TestResult         string            `json:"test_result,omitempty"`
-	SecurityScanResult string            `json:"security_scan_result,omitempty"`
-	PortfolioMetadata  PortfolioMetadata `json:"portfolio_metadata,omitempty"`
-	RequestID          string            `json:"request_id,omitempty"`
-	Profile            string            `json:"profile,omitempty"`
+	SubmissionID      string            `json:"submission_id"`
+	Title             string            `json:"title,omitempty"`
+	ArtifactSHA256    string            `json:"artifact_sha256,omitempty"`
+	PreviewURL        string            `json:"preview_url,omitempty"`
+	PortfolioMetadata PortfolioMetadata `json:"portfolio_metadata,omitempty"`
+	RequestID         string            `json:"request_id,omitempty"`
+	Profile           string            `json:"profile,omitempty"`
 }
 
 // AttachAssetInput supplies an asset stream and metadata to store immutably.
@@ -170,6 +170,9 @@ func (s *publishingService) CreateDraft(ctx context.Context, actor Actor, input 
 	if strings.TrimSpace(input.Slug) == "" {
 		return LabProject{}, Submission{}, NewValidationError("slug is required", nil)
 	}
+	if !slugRegex.MatchString(input.Slug) {
+		return LabProject{}, Submission{}, NewValidationError(fmt.Sprintf("invalid slug format %q: must match ^[a-z0-9]+(?:-[a-z0-9]+)*$", input.Slug), nil)
+	}
 	if strings.TrimSpace(input.Title) == "" {
 		return LabProject{}, Submission{}, NewValidationError("title is required", nil)
 	}
@@ -255,6 +258,9 @@ func (s *publishingService) UpdateDraft(ctx context.Context, actor Actor, input 
 	if strings.TrimSpace(input.SubmissionID) == "" {
 		return Submission{}, NewValidationError("submission_id is required", nil)
 	}
+	if input.Title != "" && strings.TrimSpace(input.Title) == "" {
+		return Submission{}, NewValidationError("title cannot be empty", nil)
+	}
 
 	sub, err := s.repo.GetSubmission(ctx, input.SubmissionID)
 	if err != nil {
@@ -269,12 +275,27 @@ func (s *publishingService) UpdateDraft(ctx context.Context, actor Actor, input 
 	}
 
 	now := time.Now().UTC()
+	var proj LabProject
+	updateTitle := strings.TrimSpace(input.Title) != ""
+	if updateTitle {
+		p, err := s.repo.GetLabProject(ctx, sub.LabProjectID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return Submission{}, NewNotFoundError("project not found", err)
+			}
+			return Submission{}, err
+		}
+		proj = p
+		proj.Title = strings.TrimSpace(input.Title)
+		proj.UpdatedAt = now
+	}
+
 	newSub := sub
 	newSub.Revision = sub.Revision + 1
 	newSub.State = Draft
 	newSub.UpdatedAt = now
 
-	// Reset build/test/scan evidence on draft mutation
+	// Reset build/test/scan evidence on draft mutation; caller input cannot overwrite these
 	newSub.BuildResult = ""
 	newSub.TestResult = ""
 	newSub.SecurityScanResult = ""
@@ -288,20 +309,16 @@ func (s *publishingService) UpdateDraft(ctx context.Context, actor Actor, input 
 	if input.PortfolioMetadata != nil {
 		newSub.PortfolioMetadata = input.PortfolioMetadata
 	}
-	if input.BuildResult != "" {
-		newSub.BuildResult = input.BuildResult
-	}
-	if input.TestResult != "" {
-		newSub.TestResult = input.TestResult
-	}
-	if input.SecurityScanResult != "" {
-		newSub.SecurityScanResult = input.SecurityScanResult
-	}
 
 	reqID := s.resolveRequestID(input.RequestID)
 	profile := s.resolveProfile(input.Profile)
 
 	err = s.repo.WithTx(ctx, func(txRepo Repository) error {
+		if updateTitle {
+			if err := txRepo.UpdateLabProject(ctx, proj); err != nil {
+				return err
+			}
+		}
 		if err := txRepo.UpdateSubmission(ctx, newSub, sub.Revision); err != nil {
 			return err
 		}
@@ -351,7 +368,7 @@ func (s *publishingService) AttachAsset(ctx context.Context, actor Actor, input 
 	reqID := s.resolveRequestID(input.RequestID)
 	profile := s.resolveProfile(input.Profile)
 
-	_ = s.repo.AppendAudit(ctx, AuditEvent{
+	if err := s.repo.AppendAudit(ctx, AuditEvent{
 		Timestamp:      now,
 		RequestID:      reqID,
 		Actor:          actor,
@@ -359,7 +376,9 @@ func (s *publishingService) AttachAsset(ctx context.Context, actor Actor, input 
 		Action:         "attach_asset",
 		ArtifactSHA256: ref.SHA256,
 		Result:         "success",
-	})
+	}); err != nil {
+		return ArtifactRef{}, err
+	}
 
 	return ref, nil
 }
@@ -448,8 +467,8 @@ func (s *publishingService) MarkPreviewReady(ctx context.Context, actor Actor, r
 }
 
 func (s *publishingService) RequestReview(ctx context.Context, actor Actor, submissionID string) (Submission, error) {
-	if actor.Kind != ActorAgent && actor.Kind != ActorOwner {
-		return Submission{}, NewForbiddenError("only agent or owner may request review")
+	if actor.Kind != ActorAgent {
+		return Submission{}, NewForbiddenError("only agent may request review")
 	}
 	if strings.TrimSpace(submissionID) == "" {
 		return Submission{}, NewValidationError("submission_id is required", nil)
@@ -545,6 +564,17 @@ func (s *publishingService) RequestChanges(ctx context.Context, actor Actor, dec
 	newSub.State = ChangesRequested
 	newSub.UpdatedAt = now
 
+	// Store review reason in portfolio metadata for downstream tools
+	meta := make(PortfolioMetadata)
+	for k, v := range sub.PortfolioMetadata {
+		meta[k] = v
+	}
+	reason := strings.TrimSpace(decision.Reason)
+	if reason != "" {
+		meta["review_reason"] = reason
+	}
+	newSub.PortfolioMetadata = meta
+
 	reqID := s.resolveRequestID(decision.RequestID)
 	profile := s.resolveProfile(decision.Profile)
 
@@ -563,6 +593,7 @@ func (s *publishingService) RequestChanges(ctx context.Context, actor Actor, dec
 			PreviousState:  sub.State,
 			NewState:       ChangesRequested,
 			ArtifactSHA256: newSub.ArtifactSHA256,
+			Reason:         reason,
 			Result:         "success",
 		})
 	})
@@ -603,6 +634,17 @@ func (s *publishingService) Reject(ctx context.Context, actor Actor, decision Re
 	newSub.State = Rejected
 	newSub.UpdatedAt = now
 
+	// Store review reason in portfolio metadata for downstream tools
+	meta := make(PortfolioMetadata)
+	for k, v := range sub.PortfolioMetadata {
+		meta[k] = v
+	}
+	reason := strings.TrimSpace(decision.Reason)
+	if reason != "" {
+		meta["review_reason"] = reason
+	}
+	newSub.PortfolioMetadata = meta
+
 	reqID := s.resolveRequestID(decision.RequestID)
 	profile := s.resolveProfile(decision.Profile)
 
@@ -621,6 +663,7 @@ func (s *publishingService) Reject(ctx context.Context, actor Actor, decision Re
 			PreviousState:  sub.State,
 			NewState:       Rejected,
 			ArtifactSHA256: newSub.ArtifactSHA256,
+			Reason:         reason,
 			Result:         "success",
 		})
 	})
@@ -689,7 +732,7 @@ func (s *publishingService) ApproveAndPublish(ctx context.Context, actor Actor, 
 		return PublicationResult{}, err
 	}
 
-	if strings.TrimSpace(proj.Disclaimer) == "" {
+	if !strings.Contains(proj.Disclaimer, MandatoryDisclaimer) {
 		return PublicationResult{}, NewValidationError("mandatory disclaimer missing from project", nil)
 	}
 

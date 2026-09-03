@@ -109,6 +109,34 @@ func (r *SQLiteRepository) ListLabProjects(ctx context.Context, filter ProjectFi
 	return projects, nil
 }
 
+func (r *SQLiteRepository) UpdateLabProject(ctx context.Context, project LabProject) error {
+	focus, err := json.Marshal(project.Focus)
+	if err != nil {
+		return fmt.Errorf("publishing: encode focus: %w", err)
+	}
+	platforms, err := json.Marshal(project.Platforms)
+	if err != nil {
+		return fmt.Errorf("publishing: encode platforms: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, `UPDATE lab_projects
+		SET slug = ?, title = ?, original_product = ?, disclaimer = ?, focus_json = ?, platforms_json = ?, status = ?, featured = ?, updated_at = ?
+		WHERE id = ?`,
+		project.Slug, project.Title, project.OriginalProduct, project.Disclaimer,
+		string(focus), string(platforms), project.Status, project.Featured,
+		encodeTime(project.UpdatedAt), project.ID)
+	if err != nil {
+		return classifyConflict(err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("publishing: update lab project: %w", err)
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 type rowScanner interface{ Scan(...any) error }
 
 func scanProject(row rowScanner) (LabProject, error) {

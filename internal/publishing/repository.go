@@ -38,6 +38,7 @@ type AuditEvent struct {
 	PreviousState    SubmissionState `json:"previous_state,omitempty"`
 	NewState         SubmissionState `json:"new_state,omitempty"`
 	ArtifactSHA256   string          `json:"artifact_sha256,omitempty"`
+	Reason           string          `json:"reason,omitempty"`
 	ApprovalIdentity string          `json:"approval_identity,omitempty"`
 	DeploymentIDs    []string        `json:"deployment_ids,omitempty"`
 	DestinationURLs  []string        `json:"destination_urls,omitempty"`
@@ -50,6 +51,7 @@ type Repository interface {
 	CreateLabProject(context.Context, LabProject) error
 	GetLabProject(context.Context, string) (LabProject, error)
 	ListLabProjects(context.Context, ProjectFilter) ([]LabProject, error)
+	UpdateLabProject(context.Context, LabProject) error
 	CreateSubmission(context.Context, Submission) error
 	GetSubmission(context.Context, string) (Submission, error)
 	UpdateSubmission(context.Context, Submission, int64) error

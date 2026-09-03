@@ -338,6 +338,15 @@ func TestServiceMutationAfterReviewCreatesNewRevisionAndInvalidatesApproval(t *t
 		t.Fatalf("latest submission in repo = %+v", latest)
 	}
 
+	// Verify project title was updated in repo
+	proj, err := repo.GetLabProject(ctx, sub.LabProjectID)
+	if err != nil {
+		t.Fatalf("GetLabProject: %v", err)
+	}
+	if proj.Title != "Mutate Review Updated" {
+		t.Fatalf("project title in repo = %q, want %q", proj.Title, "Mutate Review Updated")
+	}
+
 	// Attempting to approve now must fail because current state is DRAFT (approval invalidated)
 	_, err = svc.ApproveAndPublish(ctx, owner, ApproveInput{
 		SubmissionID:   sub.ID,
@@ -587,7 +596,7 @@ func TestServiceCompleteAuditEventFields(t *testing.T) {
 
 func TestServiceReviewDecisions(t *testing.T) {
 	ctx := context.Background()
-	_, store, _, svc := setupServiceTest(t)
+	repo, store, _, svc := setupServiceTest(t)
 	agent := Actor{Kind: ActorAgent, Identity: "agent:claude"}
 	owner := Actor{Kind: ActorOwner, Identity: "owner:gio0z"}
 	art := createTestArtifact(t, store, "<html><body>Decisions</body></html>")
@@ -622,6 +631,16 @@ func TestServiceReviewDecisions(t *testing.T) {
 	if sub1.State != ChangesRequested {
 		t.Fatalf("sub1 state = %s, want %s", sub1.State, ChangesRequested)
 	}
+	if reason, ok := sub1.PortfolioMetadata["review_reason"].(string); !ok || reason != "Fix contrast ratio on navbar" {
+		t.Fatalf("sub1 review_reason = %v, want %q", sub1.PortfolioMetadata["review_reason"], "Fix contrast ratio on navbar")
+	}
+	persistedSub1, err := repo.GetSubmission(ctx, sub1.ID)
+	if err != nil {
+		t.Fatalf("GetSubmission(sub1) error = %v", err)
+	}
+	if reason, ok := persistedSub1.PortfolioMetadata["review_reason"].(string); !ok || reason != "Fix contrast ratio on navbar" {
+		t.Fatalf("persistedSub1 review_reason = %v, want %q", persistedSub1.PortfolioMetadata["review_reason"], "Fix contrast ratio on navbar")
+	}
 
 	// Test Reject
 	_, sub2, _ := svc.CreateDraft(ctx, agent, CreateDraftInput{
@@ -647,6 +666,16 @@ func TestServiceReviewDecisions(t *testing.T) {
 	}
 	if sub2.State != Rejected {
 		t.Fatalf("sub2 state = %s, want %s", sub2.State, Rejected)
+	}
+	if reason, ok := sub2.PortfolioMetadata["review_reason"].(string); !ok || reason != "Concept does not align with lab guidelines" {
+		t.Fatalf("sub2 review_reason = %v, want %q", sub2.PortfolioMetadata["review_reason"], "Concept does not align with lab guidelines")
+	}
+	persistedSub2, err := repo.GetSubmission(ctx, sub2.ID)
+	if err != nil {
+		t.Fatalf("GetSubmission(sub2) error = %v", err)
+	}
+	if reason, ok := persistedSub2.PortfolioMetadata["review_reason"].(string); !ok || reason != "Concept does not align with lab guidelines" {
+		t.Fatalf("persistedSub2 review_reason = %v, want %q", persistedSub2.PortfolioMetadata["review_reason"], "Concept does not align with lab guidelines")
 	}
 }
 
@@ -742,5 +771,252 @@ func TestServiceAttachAsset(t *testing.T) {
 	}
 	if len(ref.SHA256) != 64 {
 		t.Fatalf("ref.SHA256 length = %d, want 64", len(ref.SHA256))
+	}
+}
+
+type auditFailingRepo struct {
+	Repository
+	err error
+}
+
+func (r *auditFailingRepo) AppendAudit(ctx context.Context, event AuditEvent) error {
+	if r.err != nil {
+		return r.err
+	}
+	return r.Repository.AppendAudit(ctx, event)
+}
+
+func TestServiceAttachAssetAuditError(t *testing.T) {
+	ctx := context.Background()
+	baseRepo, store, publisher, _ := setupServiceTest(t)
+	failingRepo := &auditFailingRepo{Repository: baseRepo, err: errors.New("audit disk full")}
+	svc := NewPublishingService(failingRepo, store, publisher)
+	agent := Actor{Kind: ActorAgent, Identity: "agent:claude"}
+
+	pngHeader := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
+	pngData := append(pngHeader, bytes.Repeat([]byte{0x00}, 20)...)
+
+	_, err := svc.AttachAsset(ctx, agent, AttachAssetInput{
+		Metadata: AssetMetadata{
+			Name:     "preview.png",
+			MIMEType: "image/png",
+		},
+		Content: bytes.NewReader(pngData),
+	})
+	if err == nil {
+		t.Fatal("AttachAsset succeeded when audit append failed, want error")
+	}
+	if !strings.Contains(err.Error(), "audit disk full") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestServiceSlugFormatValidation(t *testing.T) {
+	ctx := context.Background()
+	_, _, _, svc := setupServiceTest(t)
+	agent := Actor{Kind: ActorAgent, Identity: "agent:claude"}
+
+	invalidSlugs := []string{
+		"Uppercase-Slug",
+		"../path-traversal",
+		"slash/slug",
+		"space in slug",
+		"-leading-hyphen",
+		"trailing-hyphen-",
+		"double--hyphen",
+		"under_score",
+		"special@char",
+		"",
+	}
+
+	for _, badSlug := range invalidSlugs {
+		_, _, err := svc.CreateDraft(ctx, agent, CreateDraftInput{
+			Slug:            badSlug,
+			Title:           "Invalid Slug Test",
+			OriginalProduct: "Product",
+		})
+		if err == nil {
+			t.Errorf("CreateDraft(%q) succeeded, want validation error", badSlug)
+		} else if code := ErrorCode(err); code != ErrCodeValidationFailed {
+			t.Errorf("CreateDraft(%q) code = %q, want %q", badSlug, code, ErrCodeValidationFailed)
+		}
+	}
+
+	validSlugs := []string{
+		"mail",
+		"mail-redesign",
+		"v2-brand-redesign-2026",
+	}
+	for _, goodSlug := range validSlugs {
+		proj, _, err := svc.CreateDraft(ctx, agent, CreateDraftInput{
+			Slug:            goodSlug,
+			Title:           "Valid Slug Test",
+			OriginalProduct: "Product",
+		})
+		if err != nil {
+			t.Errorf("CreateDraft(%q) failed: %v", goodSlug, err)
+		}
+		if proj.Slug != goodSlug {
+			t.Errorf("CreateDraft(%q) slug = %q", goodSlug, proj.Slug)
+		}
+	}
+}
+
+func TestServiceRequestReviewAuthorization(t *testing.T) {
+	ctx := context.Background()
+	_, store, _, svc := setupServiceTest(t)
+	agent := Actor{Kind: ActorAgent, Identity: "agent:claude"}
+	owner := Actor{Kind: ActorOwner, Identity: "owner:gio0z"}
+	other := Actor{Kind: ActorKind("viewer"), Identity: "user:someone"}
+	art := createTestArtifact(t, store, "<html><body>Review Auth</body></html>")
+
+	_, sub, err := svc.CreateDraft(ctx, agent, CreateDraftInput{
+		Slug:            "review-auth-test",
+		Title:           "Review Auth Test",
+		OriginalProduct: "Prod",
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft: %v", err)
+	}
+
+	sub, err = svc.MarkPreviewReady(ctx, agent, PreviewResult{
+		SubmissionID:       sub.ID,
+		ArtifactSHA256:     art.SHA256,
+		PreviewURL:         "https://preview.example/auth",
+		BuildResult:        "passed",
+		TestResult:         "passed",
+		SecurityScanResult: "passed",
+	})
+	if err != nil {
+		t.Fatalf("MarkPreviewReady: %v", err)
+	}
+
+	// Non-agent (owner) must fail with ErrCodeForbidden
+	if _, err := svc.RequestReview(ctx, owner, sub.ID); err == nil {
+		t.Fatal("owner RequestReview succeeded, want forbidden")
+	} else if code := ErrorCode(err); code != ErrCodeForbidden {
+		t.Fatalf("owner RequestReview code = %q, want %q", code, ErrCodeForbidden)
+	}
+
+	// Non-agent (viewer) must fail with ErrCodeForbidden
+	if _, err := svc.RequestReview(ctx, other, sub.ID); err == nil {
+		t.Fatal("viewer RequestReview succeeded, want forbidden")
+	} else if code := ErrorCode(err); code != ErrCodeForbidden {
+		t.Fatalf("viewer RequestReview code = %q, want %q", code, ErrCodeForbidden)
+	}
+
+	// Agent succeeds
+	sub, err = svc.RequestReview(ctx, agent, sub.ID)
+	if err != nil {
+		t.Fatalf("agent RequestReview failed: %v", err)
+	}
+	if sub.State != InReview {
+		t.Fatalf("sub state = %s, want %s", sub.State, InReview)
+	}
+}
+
+func TestServiceApproveAndPublishDisclaimerCheck(t *testing.T) {
+	ctx := context.Background()
+	repo, store, _, svc := setupServiceTest(t)
+	agent := Actor{Kind: ActorAgent, Identity: "agent:claude"}
+	owner := Actor{Kind: ActorOwner, Identity: "owner:gio0z"}
+	art := createTestArtifact(t, store, "<html><body>Disclaimer Check</body></html>")
+
+	proj, sub, err := svc.CreateDraft(ctx, agent, CreateDraftInput{
+		Slug:            "disclaimer-check-test",
+		Title:           "Disclaimer Check",
+		OriginalProduct: "Prod",
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft: %v", err)
+	}
+
+	sub, err = svc.MarkPreviewReady(ctx, agent, PreviewResult{
+		SubmissionID:       sub.ID,
+		ArtifactSHA256:     art.SHA256,
+		PreviewURL:         "https://preview.example/disc",
+		BuildResult:        "passed",
+		TestResult:         "passed",
+		SecurityScanResult: "passed",
+	})
+	if err != nil {
+		t.Fatalf("MarkPreviewReady: %v", err)
+	}
+
+	sub, err = svc.RequestReview(ctx, agent, sub.ID)
+	if err != nil {
+		t.Fatalf("RequestReview: %v", err)
+	}
+
+	// Corrupt or remove mandatory disclaimer in the persisted project
+	proj.Disclaimer = "Custom text without required legal statement."
+	if err := repo.UpdateLabProject(ctx, proj); err != nil {
+		t.Fatalf("UpdateLabProject: %v", err)
+	}
+
+	// ApproveAndPublish must fail because disclaimer lacks MandatoryDisclaimer
+	_, err = svc.ApproveAndPublish(ctx, owner, ApproveInput{
+		SubmissionID:   sub.ID,
+		ArtifactSHA256: art.SHA256,
+		IdempotencyKey: "disc-test-key",
+	})
+	if err == nil {
+		t.Fatal("ApproveAndPublish succeeded without mandatory disclaimer, want validation error")
+	}
+	if code := ErrorCode(err); code != ErrCodeValidationFailed {
+		t.Fatalf("ErrorCode = %q, want %q", code, ErrCodeValidationFailed)
+	}
+	if !strings.Contains(err.Error(), "mandatory disclaimer missing") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestServiceUpdateDraftBuildTestScanNotOverwritten(t *testing.T) {
+	ctx := context.Background()
+	_, store, _, svc := setupServiceTest(t)
+	agent := Actor{Kind: ActorAgent, Identity: "agent:claude"}
+	art := createTestArtifact(t, store, "<html><body>Build Gate Reset</body></html>")
+
+	_, sub, err := svc.CreateDraft(ctx, agent, CreateDraftInput{
+		Slug:            "build-gate-reset",
+		Title:           "Build Gate Reset",
+		OriginalProduct: "Prod",
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft: %v", err)
+	}
+
+	sub, err = svc.MarkPreviewReady(ctx, agent, PreviewResult{
+		SubmissionID:       sub.ID,
+		ArtifactSHA256:     art.SHA256,
+		PreviewURL:         "https://preview.example/reset",
+		BuildResult:        "passed",
+		TestResult:         "passed",
+		SecurityScanResult: "passed",
+	})
+	if err != nil {
+		t.Fatalf("MarkPreviewReady: %v", err)
+	}
+	if sub.BuildResult != "passed" || sub.TestResult != "passed" || sub.SecurityScanResult != "passed" {
+		t.Fatalf("preview ready results not set: build=%s test=%s scan=%s", sub.BuildResult, sub.TestResult, sub.SecurityScanResult)
+	}
+
+	// Update draft must reset build, test, and scan results to empty strings
+	updatedSub, err := svc.UpdateDraft(ctx, agent, UpdateDraftInput{
+		SubmissionID: sub.ID,
+		Title:        "New Title",
+	})
+	if err != nil {
+		t.Fatalf("UpdateDraft: %v", err)
+	}
+
+	if updatedSub.BuildResult != "" || updatedSub.TestResult != "" || updatedSub.SecurityScanResult != "" {
+		t.Fatalf("UpdateDraft failed to reset build/test/scan: build=%q test=%q scan=%q",
+			updatedSub.BuildResult, updatedSub.TestResult, updatedSub.SecurityScanResult)
+	}
+
+	// Cannot request review without passing build/test/scan again via MarkPreviewReady
+	if _, err := svc.RequestReview(ctx, agent, updatedSub.ID); err == nil {
+		t.Fatal("RequestReview succeeded on draft with reset build/test/scan, want error")
 	}
 }
