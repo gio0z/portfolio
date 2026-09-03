@@ -349,7 +349,7 @@ func (r *SQLiteRepository) ListSubmissions(ctx context.Context, filter Submissio
 func (r *SQLiteRepository) ListAuditEvents(ctx context.Context, filter AuditFilter) ([]AuditEvent, error) {
 	query := `SELECT event_json, request_id, timestamp FROM audit_events ORDER BY sequence DESC`
 	var args []any
-	if filter.Limit > 0 {
+	if filter.Limit > 0 && filter.SubmissionID == "" && filter.ProjectID == "" {
 		query += ` LIMIT ?`
 		args = append(args, filter.Limit)
 	}
@@ -362,6 +362,9 @@ func (r *SQLiteRepository) ListAuditEvents(ctx context.Context, filter AuditFilt
 
 	var events []AuditEvent
 	for rows.Next() {
+		if filter.Limit > 0 && len(events) >= filter.Limit {
+			break
+		}
 		var raw, reqID, timestamp string
 		if err := rows.Scan(&raw, &reqID, &timestamp); err != nil {
 			return nil, fmt.Errorf("publishing: scan audit event: %w", err)

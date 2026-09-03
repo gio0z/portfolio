@@ -40,24 +40,30 @@ func (h *Handler) Routes(authSvc *adminauth.Service) http.Handler {
 // Approve-and-publish is additionally protected by RequireStepUp.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux, authSvc *adminauth.Service) {
 	wrapOwner := func(next http.HandlerFunc) http.Handler {
-		if authSvc != nil {
-			return authSvc.OwnerMiddleware(next)
+		if authSvc == nil {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.Error(w, "unauthorized: admin auth service not configured", http.StatusUnauthorized)
+			})
 		}
-		return next
+		return authSvc.OwnerMiddleware(next)
 	}
 
 	wrapMutation := func(next http.HandlerFunc) http.Handler {
-		if authSvc != nil {
-			return authSvc.OwnerMiddleware(authSvc.CSRFMiddleware(next))
+		if authSvc == nil {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.Error(w, "unauthorized: admin auth service not configured", http.StatusUnauthorized)
+			})
 		}
-		return next
+		return authSvc.OwnerMiddleware(authSvc.CSRFMiddleware(next))
 	}
 
 	wrapStepUp := func(next http.HandlerFunc) http.Handler {
-		if authSvc != nil {
-			return authSvc.OwnerMiddleware(authSvc.CSRFMiddleware(authSvc.RequireStepUp(next)))
+		if authSvc == nil {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.Error(w, "unauthorized: admin auth service not configured", http.StatusUnauthorized)
+			})
 		}
-		return next
+		return authSvc.OwnerMiddleware(authSvc.CSRFMiddleware(authSvc.RequireStepUp(next)))
 	}
 
 	// Read endpoints
@@ -90,9 +96,17 @@ func (h *Handler) HandleOverview(w http.ResponseWriter, r *http.Request) {
 		if sub.State == publishing.InReview {
 			pendingReviews++
 		}
-		if !strings.EqualFold(sub.BuildResult, "passed") ||
-			!strings.EqualFold(sub.TestResult, "passed") ||
-			!strings.EqualFold(sub.SecurityScanResult, "passed") {
+		hasFailure := false
+		if sub.BuildResult != "" && !strings.EqualFold(sub.BuildResult, "passed") {
+			hasFailure = true
+		}
+		if sub.TestResult != "" && !strings.EqualFold(sub.TestResult, "passed") {
+			hasFailure = true
+		}
+		if sub.SecurityScanResult != "" && !strings.EqualFold(sub.SecurityScanResult, "passed") {
+			hasFailure = true
+		}
+		if hasFailure {
 			buildFailures++
 		}
 	}
@@ -373,9 +387,12 @@ func (h *Handler) HandleArchiveProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Consume optional JSON body with size limit
-	var body struct{}
-	if r.Body != nil {
-		_ = decodeJSON(w, r, &body)
+	if r.Body != nil && r.ContentLength > 0 {
+		var body struct{}
+		if err := decodeJSON(w, r, &body); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body", "validation_failed")
+			return
+		}
 	}
 
 	actor := actorFromContext(ctx)
@@ -396,8 +413,12 @@ func (h *Handler) HandleArchiveProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Also update project status if present
-	if proj, getErr := h.repo.GetLabProject(ctx, id); getErr == nil {
+	// Also update project status if present (resolving project ID if a submission ID was passed)
+	projID := id
+	if sub, getSubErr := h.repo.GetSubmission(ctx, id); getSubErr == nil {
+		projID = sub.LabProjectID
+	}
+	if proj, getErr := h.repo.GetLabProject(ctx, projID); getErr == nil {
 		proj.Status = "ARCHIVED"
 		proj.UpdatedAt = time.Now().UTC()
 		_ = h.repo.UpdateLabProject(ctx, proj)
@@ -499,7 +520,7 @@ func writeError(w http.ResponseWriter, status int, message, code string) {
 
 func cleanErrorString(msg string) string {
 	lower := strings.ToLower(msg)
-	for _, sensitive := range []string{"/home/", "/var/", "sqlite", "sql:", "bearer", "token", "password", "secret", "stack trace"} {
+	for _, sensitive := range []string{"/home/", "/var/", "/app/", "/tmp/", "goroutine", "sqlite", "sql:", "bearer", "token", "password", "secret", "stack trace"} {
 		if strings.Contains(lower, sensitive) {
 			return "an internal processing error occurred"
 		}
