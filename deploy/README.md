@@ -134,29 +134,56 @@ cannot be automated. At <https://github.com/settings/developers> → New OAuth A
 The callback is pinned to `ADMIN_PUBLIC_ORIGIN`, so it must match exactly, and
 both values must move together if either changes.
 
+After creating the app, put the two credentials into
+`/etc/portfolio/portfolio.env`, replacing the `PLACEHOLDER` values the bootstrap
+wrote. They are not read from anywhere else, and the server stores no copy:
+
+```bash
+install -m 600 /dev/null /tmp/oauth.env   # edit, then:
+# ADMIN_GITHUB_CLIENT_ID=<id>
+# ADMIN_GITHUB_CLIENT_SECRET=<secret>
+grep -q ADMIN_GITHUB_CLIENT_ID /etc/portfolio/portfolio.env \
+  && sed -i "s|^ADMIN_GITHUB_CLIENT_ID=.*|ADMIN_GITHUB_CLIENT_ID=<id>|" /etc/portfolio/portfolio.env
+systemctl restart portfolio
+```
+
+While the placeholders are in place the server still starts, because the values
+are non-empty; sign-in simply fails at GitHub. That is deliberate — it keeps the
+public site up while the OAuth app is being registered — but it means a
+placeholder is indistinguishable from a typo until someone tries to sign in.
+
 ## 5. Cloudflare
 
 Tunnel ingress is managed in the Cloudflare dashboard (the tunnel token is
-remote-configured, so there is no local `config.yml`). For each hostname:
+remote-configured, so there is no local `config.yml`).
 
-1. **DNS**: add a `CNAME` on the public hostname pointing at the tunnel's
-   `*.cfargotunnel.com` target, proxied. `ginapps.my.id` already resolves.
-2. **Tunnel → Public Hostnames**: add a public hostname per row below.
+**Already done:** the ingress rule for `ginapps.my.id` exists and already points
+at `http://127.0.0.1:8321` — that rule is what produced the 502s while nothing
+was listening, and it began serving correctly the moment the service started.
+No Cloudflare change is needed for the public site.
+
+**Still to add**, for the admin and Lab origins:
 
 | Public hostname | Service |
 |---|---|
-| `ginapps.my.id` | `http://127.0.0.1:8321` |
 | `admin.ginapps.my.id` | `http://127.0.0.1:8321` |
 | `lab.ginapps.my.id` | `http://127.0.0.1:8321` |
 | `preview.ginapps.my.id` | `http://127.0.0.1:8321` |
 
-All four point at the same port. The Go handler decides what each origin serves
-from the request path, and the application distinguishes them by configuration,
-not by listener.
+Add a proxied `CNAME` for each to the tunnel target, and a Public Hostname entry
+pointing at the same port. The Go handler decides what each origin serves from
+the request path; the application distinguishes them by configuration, not by
+listener.
 
-Once the DNS records exist, set the Cloudflare SSL/TLS mode to **Full**, not
-Flexible: the tunnel origin speaks plain HTTP over loopback, and Flexible would
-send users over plain HTTP at the edge.
+Tunnel and account identifiers, if the dashboard asks for them:
+
+```
+account tag: e6eadeb051f54dac0fcc9a4ac9a3d45a
+tunnel id:   4fee6d91-3b10-4fda-8cea-5c02ddcc3530
+```
+
+Set SSL/TLS mode to **Full**, not Flexible: the tunnel origin speaks plain HTTP
+over loopback, and Flexible would send users over plain HTTP at the edge.
 
 ## 6. Install the units
 
