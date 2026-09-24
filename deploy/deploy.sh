@@ -17,8 +17,8 @@ GO_BIN=${PORTFOLIO_GO_BIN:-/root/.local/go/bin/go}
 NODE_BIN_DIR=${PORTFOLIO_NODE_BIN_DIR:-/root/.local/node/bin}
 LOG_TAG=portfolio-deploy
 
-log() { logger -t "$LOG_TAG" "$*" 2>/dev/null || echo "[$LOG_TAG] $*"; }
-fail() { log "FATAL: $*"; exit 1; }
+log() { printf '[%s] %s\n' "$LOG_TAG" "$*"; }
+fail() { printf '[%s] FATAL: %s\n' "$LOG_TAG" "$*" >&2; exit 1; }
 
 [ -d "$REPO/.git" ] || fail "$REPO is not a git checkout"
 [ -f "$ENV_FILE" ] || fail "$ENV_FILE missing; refusing to deploy without configuration"
@@ -51,8 +51,10 @@ log "deploying $BEFORE..$AFTER"
 git reset --hard --quiet origin/main
 
 # 1. Frontend. `npm run build` regenerates the content JSON from pkg/api first,
-#    so the build cannot use a stale copy of the site content.
-export PATH="$NODE_BIN_DIR:$PATH"
+#    so the build cannot use a stale copy of the site content. That prebuild step
+#    shells out to `go run`, so both toolchains must be on PATH here — exporting
+#    only Node leaves the content export failing with "go: not found".
+export PATH="$NODE_BIN_DIR:$(dirname "$GO_BIN"):$PATH"
 ( cd "$REPO/frontend" && npm ci --silent && npm run build ) || fail "frontend build failed"
 [ -f "$REPO/frontend/dist/index.html" ] || fail "frontend build produced no dist/index.html"
 

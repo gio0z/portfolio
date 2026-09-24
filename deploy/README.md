@@ -42,15 +42,23 @@ curl -fsSL https://go.dev/dl/go1.23.12.linux-amd64.tar.gz -o /tmp/go.tgz
 mkdir -p /root/.local/go && tar -C /root/.local/go --strip-components=1 -xzf /tmp/go.tgz
 
 # Node (Astro requires >= 22.12)
-curl -fsSL https://nodejs.org/dist/latest-v22.x/node-v22.14.0-linux-x64.tar.xz -o /tmp/node.tar.xz
+curl -fsSL https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.xz -o /tmp/node.tar.xz
 mkdir -p /root/.local/node && tar -C /root/.local/node --strip-components=1 -xJf /tmp/node.tar.xz
 ```
 
 Verify both resolve, since the deploy script calls them by absolute path:
 
 ```bash
-/root/.local/go/bin/go version
-/root/.local/node/bin/node -v
+/root/.local/go/bin/go version      # go1.23.12 or newer
+/root/.local/node/bin/node -v       # v22.23.3 or newer
+```
+
+`npm` is a script whose shebang is `env node`, so it only runs with the Node bin
+directory on `PATH`. The deploy script exports it; running `npm` by hand on this
+host requires the same:
+
+```bash
+export PATH=/root/.local/node/bin:$PATH
 ```
 
 ## 2. Repository
