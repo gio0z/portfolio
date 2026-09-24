@@ -1,9 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { ReviewQueue } from './ReviewQueue';
 import { adminApi } from './AdminApi';
 import type { ReviewQueueItem } from './types';
+
+function renderQueue() {
+  return render(
+    <MemoryRouter>
+      <ReviewQueue />
+    </MemoryRouter>
+  );
+}
 
 describe('ReviewQueue', () => {
   const mockSubmissions: ReviewQueueItem[] = [
@@ -52,7 +61,7 @@ describe('ReviewQueue', () => {
   it('renders submissions and asserts draft title, original product, status, evidence, hash, and review actions', async () => {
     vi.spyOn(adminApi, 'getReviews').mockResolvedValue(mockSubmissions);
 
-    render(<ReviewQueue />);
+    renderQueue();
 
     // Wait for queue items to load
     await waitFor(() => {
@@ -82,12 +91,16 @@ describe('ReviewQueue', () => {
     expect(screen.getByText(/f0e1d2c3b4a5/i)).toBeInTheDocument();
 
     // 6. Assert review actions appear
-    const reviewButtons = screen.getAllByRole('button', { name: /review/i });
-    expect(reviewButtons.length).toBeGreaterThanOrEqual(2);
+    const reviewLinks = screen.getAllByRole('link', { name: /^review /i });
+    expect(reviewLinks.length).toBeGreaterThanOrEqual(2);
+    const row1 = screen.getByTestId('review-item-sub-1');
+    expect(within(row1).getByRole('link', { name: 'Review Checkout Redesign V2' })).toHaveAttribute(
+      'href',
+      '/admin/reviews/sub-1'
+    );
 
     // 7. Assert a failed scan disables approval
     // Find row or card for sub-1 (can_approve: true, scan: passed)
-    const row1 = screen.getByTestId('review-item-sub-1');
     const approveBtn1 = within(row1).getByRole('button', { name: /approve/i });
     expect(approveBtn1).toBeEnabled();
 
@@ -110,7 +123,7 @@ describe('ReviewQueue', () => {
     });
 
     const user = userEvent.setup();
-    render(<ReviewQueue />);
+    renderQueue();
 
     await waitFor(() => {
       expect(screen.getByText('Checkout Redesign V2')).toBeInTheDocument();
@@ -126,7 +139,7 @@ describe('ReviewQueue', () => {
   it('handles empty queue gracefully', async () => {
     vi.spyOn(adminApi, 'getReviews').mockResolvedValue([]);
 
-    render(<ReviewQueue />);
+    renderQueue();
 
     await waitFor(() => {
       expect(screen.getByText(/no submissions in review queue/i)).toBeInTheDocument();

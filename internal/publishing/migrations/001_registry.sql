@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS lab_projects (
     title TEXT NOT NULL,
     original_product TEXT NOT NULL,
     disclaimer TEXT NOT NULL,
+    source_urls_json TEXT NOT NULL DEFAULT '[]',
     focus_json TEXT NOT NULL,
     platforms_json TEXT NOT NULL,
     status TEXT NOT NULL,

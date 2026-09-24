@@ -52,10 +52,57 @@ func OpenRegistry(path string) (*sql.DB, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("publishing: migrate registry: %w", err)
 	}
+	if err := ensureLabProjectColumns(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return db, nil
 }
 
+// ensureLabProjectColumns backfills columns added after a registry was first
+// created. The base migration is CREATE TABLE IF NOT EXISTS, so an existing
+// registry file keeps its original column set; without this step a registry
+// written by an earlier build would fail every project read once the SELECT
+// list grew.
+func ensureLabProjectColumns(db *sql.DB) error {
+	existing, err := labProjectColumns(db)
+	if err != nil {
+		return err
+	}
+	if _, ok := existing["source_urls_json"]; !ok {
+		if _, err := db.Exec(`ALTER TABLE lab_projects ADD COLUMN source_urls_json TEXT NOT NULL DEFAULT '[]'`); err != nil {
+			return fmt.Errorf("publishing: migrate lab_projects.source_urls_json: %w", err)
+		}
+	}
+	return nil
+}
+
+// labProjectColumns reports the current column set of lab_projects.
+func labProjectColumns(db *sql.DB) (map[string]struct{}, error) {
+	rows, err := db.Query(`SELECT name FROM pragma_table_info('lab_projects')`)
+	if err != nil {
+		return nil, fmt.Errorf("publishing: inspect lab_projects: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	columns := make(map[string]struct{})
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("publishing: inspect lab_projects: %w", err)
+		}
+		columns[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("publishing: inspect lab_projects: %w", err)
+	}
+	return columns, nil
+}
+
 func (r *SQLiteRepository) CreateLabProject(ctx context.Context, project LabProject) error {
+	sourceURLs, err := json.Marshal(project.SourceURLs)
+	if err != nil {
+		return fmt.Errorf("publishing: encode source_urls: %w", err)
+	}
 	focus, err := json.Marshal(project.Focus)
 	if err != nil {
 		return fmt.Errorf("publishing: encode focus: %w", err)
@@ -65,20 +112,20 @@ func (r *SQLiteRepository) CreateLabProject(ctx context.Context, project LabProj
 		return fmt.Errorf("publishing: encode platforms: %w", err)
 	}
 	_, err = r.db.ExecContext(ctx, `INSERT INTO lab_projects
-		(id, slug, title, original_product, disclaimer, focus_json, platforms_json, status, featured, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, project.ID, project.Slug, project.Title,
-		project.OriginalProduct, project.Disclaimer, string(focus), string(platforms), project.Status,
+		(id, slug, title, original_product, disclaimer, source_urls_json, focus_json, platforms_json, status, featured, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, project.ID, project.Slug, project.Title,
+		project.OriginalProduct, project.Disclaimer, string(sourceURLs), string(focus), string(platforms), project.Status,
 		project.Featured, encodeTime(project.CreatedAt), encodeTime(project.UpdatedAt))
 	return classifyConflict(err)
 }
 
 func (r *SQLiteRepository) GetLabProject(ctx context.Context, id string) (LabProject, error) {
 	return scanProject(r.db.QueryRowContext(ctx, `SELECT id, slug, title, original_product, disclaimer,
-		focus_json, platforms_json, status, featured, created_at, updated_at FROM lab_projects WHERE id = ?`, id))
+		source_urls_json, focus_json, platforms_json, status, featured, created_at, updated_at FROM lab_projects WHERE id = ?`, id))
 }
 
 func (r *SQLiteRepository) ListLabProjects(ctx context.Context, filter ProjectFilter) ([]LabProject, error) {
-	query := `SELECT id, slug, title, original_product, disclaimer, focus_json, platforms_json,
+	query := `SELECT id, slug, title, original_product, disclaimer, source_urls_json, focus_json, platforms_json,
 		status, featured, created_at, updated_at FROM lab_projects WHERE 1=1`
 	var args []any
 	if filter.Status != "" {
@@ -110,6 +157,10 @@ func (r *SQLiteRepository) ListLabProjects(ctx context.Context, filter ProjectFi
 }
 
 func (r *SQLiteRepository) UpdateLabProject(ctx context.Context, project LabProject) error {
+	sourceURLs, err := json.Marshal(project.SourceURLs)
+	if err != nil {
+		return fmt.Errorf("publishing: encode source_urls: %w", err)
+	}
 	focus, err := json.Marshal(project.Focus)
 	if err != nil {
 		return fmt.Errorf("publishing: encode focus: %w", err)
@@ -119,10 +170,10 @@ func (r *SQLiteRepository) UpdateLabProject(ctx context.Context, project LabProj
 		return fmt.Errorf("publishing: encode platforms: %w", err)
 	}
 	result, err := r.db.ExecContext(ctx, `UPDATE lab_projects
-		SET slug = ?, title = ?, original_product = ?, disclaimer = ?, focus_json = ?, platforms_json = ?, status = ?, featured = ?, updated_at = ?
+		SET slug = ?, title = ?, original_product = ?, disclaimer = ?, source_urls_json = ?, focus_json = ?, platforms_json = ?, status = ?, featured = ?, updated_at = ?
 		WHERE id = ?`,
 		project.Slug, project.Title, project.OriginalProduct, project.Disclaimer,
-		string(focus), string(platforms), project.Status, project.Featured,
+		string(sourceURLs), string(focus), string(platforms), project.Status, project.Featured,
 		encodeTime(project.UpdatedAt), project.ID)
 	if err != nil {
 		return classifyConflict(err)
@@ -141,14 +192,17 @@ type rowScanner interface{ Scan(...any) error }
 
 func scanProject(row rowScanner) (LabProject, error) {
 	var project LabProject
-	var focus, platforms, created, updated string
+	var sourceURLs, focus, platforms, created, updated string
 	err := row.Scan(&project.ID, &project.Slug, &project.Title, &project.OriginalProduct, &project.Disclaimer,
-		&focus, &platforms, &project.Status, &project.Featured, &created, &updated)
+		&sourceURLs, &focus, &platforms, &project.Status, &project.Featured, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return LabProject{}, ErrNotFound
 	}
 	if err != nil {
 		return LabProject{}, fmt.Errorf("publishing: scan project: %w", err)
+	}
+	if err := json.Unmarshal([]byte(sourceURLs), &project.SourceURLs); err != nil {
+		return LabProject{}, fmt.Errorf("publishing: decode source_urls: %w", err)
 	}
 	if err := json.Unmarshal([]byte(focus), &project.Focus); err != nil {
 		return LabProject{}, fmt.Errorf("publishing: decode focus: %w", err)

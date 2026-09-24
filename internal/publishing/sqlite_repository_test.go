@@ -219,3 +219,92 @@ func TestSQLiteWithTxRollsBackAllMutations(t *testing.T) {
 }
 
 func boolPointer(value bool) *bool { return &value }
+
+// TestSQLiteSourceURLsPersistAcrossProjectWrites covers the new reference
+// metadata round trip and the "absent means unchanged" contract at the
+// repository boundary.
+func TestSQLiteSourceURLsPersistAcrossProjectWrites(t *testing.T) {
+	_, repo := openSQLiteTestRepository(t)
+	ctx := context.Background()
+
+	project := testLabProject()
+	project.SourceURLs = []string{"https://example.com/one", "https://example.com/two"}
+	if err := repo.CreateLabProject(ctx, project); err != nil {
+		t.Fatalf("CreateLabProject() error = %v", err)
+	}
+
+	stored, err := repo.GetLabProject(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("GetLabProject() error = %v", err)
+	}
+	if !reflect.DeepEqual(stored.SourceURLs, project.SourceURLs) {
+		t.Fatalf("SourceURLs = %#v, want %#v", stored.SourceURLs, project.SourceURLs)
+	}
+
+	listed, err := repo.ListLabProjects(ctx, ProjectFilter{})
+	if err != nil {
+		t.Fatalf("ListLabProjects() error = %v", err)
+	}
+	if len(listed) != 1 || !reflect.DeepEqual(listed[0].SourceURLs, project.SourceURLs) {
+		t.Fatalf("ListLabProjects() source urls = %#v, want %#v", listed, project.SourceURLs)
+	}
+
+	stored.SourceURLs = []string{"https://example.com/replaced"}
+	if err := repo.UpdateLabProject(ctx, stored); err != nil {
+		t.Fatalf("UpdateLabProject() error = %v", err)
+	}
+	updated, err := repo.GetLabProject(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("GetLabProject() after update error = %v", err)
+	}
+	if !reflect.DeepEqual(updated.SourceURLs, []string{"https://example.com/replaced"}) {
+		t.Fatalf("SourceURLs after update = %#v", updated.SourceURLs)
+	}
+}
+
+// TestOpenRegistryBackfillsSourceURLsOnLegacyRegistry guards the upgrade path:
+// the base migration is CREATE TABLE IF NOT EXISTS, so a registry file written
+// before source_urls existed keeps its old column set. Opening it must add the
+// column rather than failing every subsequent project read.
+func TestOpenRegistryBackfillsSourceURLsOnLegacyRegistry(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.db")
+
+	legacy, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatalf("open legacy registry: %v", err)
+	}
+	if _, err := legacy.Exec(`CREATE TABLE lab_projects (
+		id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
+		original_product TEXT NOT NULL, disclaimer TEXT NOT NULL,
+		focus_json TEXT NOT NULL, platforms_json TEXT NOT NULL,
+		status TEXT NOT NULL, featured INTEGER NOT NULL,
+		created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create legacy schema: %v", err)
+	}
+	if _, err := legacy.Exec(`INSERT INTO lab_projects VALUES
+		('project-legacy', 'legacy-slug', 'Legacy', 'Legacy Product', 'Disclaimer',
+		 '["a"]', '["web"]', 'PUBLISHED', 1, '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')`); err != nil {
+		t.Fatalf("seed legacy row: %v", err)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatalf("close legacy registry: %v", err)
+	}
+
+	db, err := OpenRegistry(path)
+	if err != nil {
+		t.Fatalf("OpenRegistry() on legacy registry error = %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	repo := NewSQLiteRepository(db)
+
+	project, err := repo.GetLabProject(context.Background(), "project-legacy")
+	if err != nil {
+		t.Fatalf("GetLabProject() on migrated legacy registry error = %v", err)
+	}
+	if len(project.SourceURLs) != 0 {
+		t.Fatalf("legacy project SourceURLs = %#v, want empty", project.SourceURLs)
+	}
+	if project.Slug != "legacy-slug" || !project.Featured {
+		t.Fatalf("migration altered legacy row: %#v", project)
+	}
+}

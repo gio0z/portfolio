@@ -591,4 +591,3 @@ func TestSession_StatusAndLogout(t *testing.T) {
 	}
 	_ = session
 }
-

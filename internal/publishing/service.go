@@ -24,6 +24,7 @@ type CreateDraftInput struct {
 	Title             string            `json:"title"`
 	OriginalProduct   string            `json:"original_product"`
 	Disclaimer        string            `json:"disclaimer,omitempty"`
+	SourceURLs        []string          `json:"source_urls,omitempty"`
 	Focus             []string          `json:"focus,omitempty"`
 	Platforms         []string          `json:"platforms,omitempty"`
 	Featured          bool              `json:"featured,omitempty"`
@@ -35,8 +36,12 @@ type CreateDraftInput struct {
 
 // UpdateDraftInput contains modifications to an existing submission.
 type UpdateDraftInput struct {
-	SubmissionID      string            `json:"submission_id"`
-	Title             string            `json:"title,omitempty"`
+	SubmissionID string `json:"submission_id"`
+	Title        string `json:"title,omitempty"`
+	// SourceURLs replaces the project's reference links when non-nil. A nil
+	// slice leaves the existing links untouched, matching the field's
+	// "absent means unchanged" contract.
+	SourceURLs        []string          `json:"source_urls,omitempty"`
 	ArtifactSHA256    string            `json:"artifact_sha256,omitempty"`
 	PreviewURL        string            `json:"preview_url,omitempty"`
 	PortfolioMetadata PortfolioMetadata `json:"portfolio_metadata,omitempty"`
@@ -180,6 +185,11 @@ func (s *publishingService) CreateDraft(ctx context.Context, actor Actor, input 
 		return LabProject{}, Submission{}, NewValidationError("original_product is required", nil)
 	}
 
+	sourceURLs, err := NormalizeSourceURLs(input.SourceURLs)
+	if err != nil {
+		return LabProject{}, Submission{}, err
+	}
+
 	disclaimer := input.Disclaimer
 	if strings.TrimSpace(disclaimer) == "" {
 		disclaimer = MandatoryDisclaimer
@@ -194,6 +204,7 @@ func (s *publishingService) CreateDraft(ctx context.Context, actor Actor, input 
 		Title:           strings.TrimSpace(input.Title),
 		OriginalProduct: strings.TrimSpace(input.OriginalProduct),
 		Disclaimer:      disclaimer,
+		SourceURLs:      sourceURLs,
 		Focus:           input.Focus,
 		Platforms:       input.Platforms,
 		Status:          "draft",
@@ -220,7 +231,7 @@ func (s *publishingService) CreateDraft(ctx context.Context, actor Actor, input 
 	reqID := s.resolveRequestID(input.RequestID)
 	profile := s.resolveProfile(input.Profile)
 
-	err := s.repo.WithTx(ctx, func(txRepo Repository) error {
+	err = s.repo.WithTx(ctx, func(txRepo Repository) error {
 		if err := txRepo.CreateLabProject(ctx, project); err != nil {
 			if errors.Is(err, ErrConflict) {
 				return NewSlugConflictError(fmt.Sprintf("slug %q already exists", project.Slug), err)
@@ -275,9 +286,22 @@ func (s *publishingService) UpdateDraft(ctx context.Context, actor Actor, input 
 	}
 
 	now := time.Now().UTC()
+	// source_urls follows an "absent means unchanged" contract: a nil slice
+	// leaves existing links alone, while an explicit (possibly empty) slice
+	// replaces them. Validate before opening the transaction so a bad URL
+	// cannot leave a half-applied revision behind.
+	updateSources := input.SourceURLs != nil
+	var sourceURLs []string
+	if updateSources {
+		normalized, err := NormalizeSourceURLs(input.SourceURLs)
+		if err != nil {
+			return Submission{}, err
+		}
+		sourceURLs = normalized
+	}
 	var proj LabProject
 	updateTitle := strings.TrimSpace(input.Title) != ""
-	if updateTitle {
+	if updateTitle || updateSources {
 		p, err := s.repo.GetLabProject(ctx, sub.LabProjectID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
@@ -286,7 +310,12 @@ func (s *publishingService) UpdateDraft(ctx context.Context, actor Actor, input 
 			return Submission{}, err
 		}
 		proj = p
-		proj.Title = strings.TrimSpace(input.Title)
+		if updateTitle {
+			proj.Title = strings.TrimSpace(input.Title)
+		}
+		if updateSources {
+			proj.SourceURLs = sourceURLs
+		}
 		proj.UpdatedAt = now
 	}
 
@@ -314,7 +343,7 @@ func (s *publishingService) UpdateDraft(ctx context.Context, actor Actor, input 
 	profile := s.resolveProfile(input.Profile)
 
 	err = s.repo.WithTx(ctx, func(txRepo Repository) error {
-		if updateTitle {
+		if updateTitle || updateSources {
 			if err := txRepo.UpdateLabProject(ctx, proj); err != nil {
 				return err
 			}
@@ -779,6 +808,9 @@ func (s *publishingService) ApproveAndPublish(ctx context.Context, actor Actor, 
 	newSub.Revision = sub.Revision + 1
 	newSub.State = Published
 	newSub.UpdatedAt = now
+	newProj := proj
+	newProj.Status = "PUBLISHED"
+	newProj.UpdatedAt = now
 
 	approval := Approval{
 		SubmissionID:   sub.ID,
@@ -805,6 +837,9 @@ func (s *publishingService) ApproveAndPublish(ctx context.Context, actor Actor, 
 
 	err = s.repo.WithTx(ctx, func(txRepo Repository) error {
 		if err := txRepo.RecordApproval(ctx, approval); err != nil {
+			return err
+		}
+		if err := txRepo.UpdateLabProject(ctx, newProj); err != nil {
 			return err
 		}
 		if err := txRepo.UpdateSubmission(ctx, newSub, sub.Revision); err != nil {

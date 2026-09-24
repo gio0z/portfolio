@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -450,6 +451,40 @@ func TestAdminAPI_GetReviewDetail(t *testing.T) {
 	h.mux.ServeHTTP(rr404, req404)
 	if rr404.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for non-existent review, got %d", rr404.Code)
+	}
+}
+
+// Source URLs are review provenance: the owner must be able to see the
+// third-party source site the redesign was derived from before approving.
+func TestAdminAPI_ReviewDetailExposesSourceURLs(t *testing.T) {
+	h := setupTestHarness(t)
+
+	proj, sub := seedProjectAndSubmission(t, h, "source-urls", "Source URL Project", publishing.InReview, "passed")
+	proj.SourceURLs = []string{"https://example.com/original", "https://example.com/pricing"}
+	if err := h.repo.UpdateLabProject(context.Background(), proj); err != nil {
+		t.Fatalf("UpdateLabProject: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/reviews/"+sub.ID, nil)
+	req.AddCookie(h.ownerCookie)
+	rr := httptest.NewRecorder()
+	h.mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+
+	var detail adminapi.ReviewDetailResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode review detail: %v", err)
+	}
+	want := []string{"https://example.com/original", "https://example.com/pricing"}
+	if !reflect.DeepEqual(detail.Project.SourceURLs, want) {
+		t.Fatalf("source_urls = %#v, want %#v", detail.Project.SourceURLs, want)
+	}
+	// The frontend reads this exact wire key, so pin the name rather than only
+	// the Go-side field.
+	if !strings.Contains(rr.Body.String(), `"source_urls"`) {
+		t.Fatalf("review detail JSON is missing the source_urls key: %s", rr.Body.String())
 	}
 }
 

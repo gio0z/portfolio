@@ -14,7 +14,7 @@ const (
 	ErrCodeScanFailed        = "scan_failed"
 	ErrCodeSlugConflict      = "slug_conflict"
 	ErrCodePublicationFailed = "publication_failed"
-	ErrCodeNotFound         = "not_found"
+	ErrCodeNotFound          = "not_found"
 )
 
 // ServiceError represents a structured, domain-specific publishing error.

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { adminApi, AdminApiError } from './AdminApi';
 import type { ReviewQueueItem } from './types';
 
@@ -275,18 +276,13 @@ export function ReviewQueue({ initialSubmissions }: ReviewQueueProps) {
 
                 {/* Actions */}
                 <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-                  <button
-                    type="button"
+                  <Link
+                    to={`/admin/reviews/${item.id}`}
                     aria-label={`Review ${item.project_title}`}
-                    onClick={() => {
-                      if (item.preview_url) {
-                        window.open(item.preview_url, '_blank');
-                      }
-                    }}
                     className="px-3 py-1.5 text-xs font-medium text-zinc-700 bg-white border border-zinc-300 rounded-md hover:bg-zinc-50 transition-colors"
                   >
                     Review
-                  </button>
+                  </Link>
 
                   <button
                     type="button"

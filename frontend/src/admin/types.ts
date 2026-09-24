@@ -40,9 +40,63 @@ export interface ArtifactDetail {
   sha256: string;
 }
 
+export interface SubmissionAsset {
+  name: string;
+  url: string;
+  size?: number;
+  mime_type?: string;
+}
+
+export interface SubmissionPortfolioMetadata {
+  summary?: string;
+  description?: string;
+  tags?: string[];
+  featured?: boolean;
+  case_study_slug?: string;
+  metrics?: Record<string, string>;
+  before_image_url?: string;
+  after_image_url?: string;
+  build_logs?: string;
+  test_logs?: string;
+  security_scan_logs?: string;
+  assets?: SubmissionAsset[];
+  [key: string]: unknown;
+}
+
+export interface SubmissionDetail {
+  id: string;
+  lab_project_id: string;
+  revision: number;
+  state: string;
+  artifact_sha256: string;
+  preview_url: string;
+  build_result: string;
+  test_result: string;
+  security_scan_result: string;
+  portfolio_metadata?: SubmissionPortfolioMetadata;
+  submitted_by: string;
+  submitted_at: string;
+  updated_at: string;
+}
+
+export interface LabProjectDetail {
+  id: string;
+  slug: string;
+  title: string;
+  original_product: string;
+  disclaimer: string;
+  focus?: string[];
+  platforms?: string[];
+  source_urls?: string[];
+  status: string;
+  featured: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface ReviewDetailResponse {
-  submission: unknown;
-  project: unknown;
+  submission: SubmissionDetail;
+  project: LabProjectDetail;
   artifact: ArtifactDetail;
   can_approve: boolean;
 }

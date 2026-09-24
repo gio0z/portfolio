@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	CSRFHeaderName     = "X-CSRF-Token"
-	CSRFHeaderAltName  = "X-XSRF-Token"
-	CSRFCookieName     = "admin_csrf"
+	CSRFHeaderName    = "X-CSRF-Token"
+	CSRFHeaderAltName = "X-XSRF-Token"
+	CSRFCookieName    = "admin_csrf"
 )
 
 // IssueCSRFToken derives a cryptographically bound CSRF token for a given session.

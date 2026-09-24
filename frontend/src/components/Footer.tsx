@@ -14,8 +14,7 @@ export const Footer: React.FC = () => {
           <span>© {new Date().getFullYear()} Regio Dani Pangestu. All rights reserved.</span>
         </div>
 
-        <div className="flex items-center gap-6">
-          <span className="font-mono text-xs text-zinc-400">Architecture: Go + Vite</span>
+        <div className="flex items-center">
           <button
             onClick={scrollToTop}
             aria-label="Back to top"

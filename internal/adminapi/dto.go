@@ -16,22 +16,22 @@ type OverviewResponse struct {
 
 // ReviewQueueItem is an item in the admin review queue listing.
 type ReviewQueueItem struct {
-	ID                 string                   `json:"id"`
-	ProjectID          string                   `json:"project_id"`
-	ProjectSlug        string                   `json:"project_slug"`
-	ProjectTitle       string                   `json:"project_title"`
-	OriginalProduct    string                   `json:"original_product"`
-	Revision           int64                    `json:"revision"`
-	State              string                   `json:"state"`
-	ArtifactSHA256     string                   `json:"artifact_sha256"`
-	PreviewURL         string                   `json:"preview_url"`
-	BuildResult        string                   `json:"build_result"`
-	TestResult         string                   `json:"test_result"`
-	SecurityScanResult string                   `json:"security_scan_result"`
-	CanApprove         bool                     `json:"can_approve"`
-	SubmittedBy        string                   `json:"submitted_by"`
-	SubmittedAt        time.Time                `json:"submitted_at"`
-	UpdatedAt          time.Time                `json:"updated_at"`
+	ID                 string                       `json:"id"`
+	ProjectID          string                       `json:"project_id"`
+	ProjectSlug        string                       `json:"project_slug"`
+	ProjectTitle       string                       `json:"project_title"`
+	OriginalProduct    string                       `json:"original_product"`
+	Revision           int64                        `json:"revision"`
+	State              string                       `json:"state"`
+	ArtifactSHA256     string                       `json:"artifact_sha256"`
+	PreviewURL         string                       `json:"preview_url"`
+	BuildResult        string                       `json:"build_result"`
+	TestResult         string                       `json:"test_result"`
+	SecurityScanResult string                       `json:"security_scan_result"`
+	CanApprove         bool                         `json:"can_approve"`
+	SubmittedBy        string                       `json:"submitted_by"`
+	SubmittedAt        time.Time                    `json:"submitted_at"`
+	UpdatedAt          time.Time                    `json:"updated_at"`
 	PortfolioMetadata  publishing.PortfolioMetadata `json:"portfolio_metadata,omitempty"`
 }
 

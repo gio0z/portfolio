@@ -1,0 +1,20 @@
+# Sandboxed static-build runner for design-lab previews.
+#
+# The preview runner launches this image per build with locked-down flags
+# (see internal/preview/policy.go):
+#   --read-only --network=none --cap-drop=ALL
+#   --security-opt=no-new-privileges --pids-limit --memory --cpus
+#   --user=nonroot
+# The immutable source is mounted read-only at /src; static output written
+# to /out is the only export. No Docker socket, host home, or credentials
+# are ever mounted.
+FROM alpine:3.20
+
+RUN adduser -D -u 65532 nonroot \
+    && mkdir -p /src /out /tmp \
+    && chown -R nonroot:nonroot /src /out /tmp
+
+USER nonroot
+WORKDIR /src
+
+CMD ["/bin/true"]

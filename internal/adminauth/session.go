@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	SessionCookieName    = "admin_session"
-	DefaultSessionTTL    = 24 * time.Hour
+	SessionCookieName = "admin_session"
+	DefaultSessionTTL = 24 * time.Hour
 )
 
 var (

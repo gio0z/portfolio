@@ -33,6 +33,24 @@ export interface Project {
   metrics: string;
 }
 
+export interface DesignLabProject {
+  id: string;
+  slug: string;
+  title: string;
+  original_product: string;
+  disclaimer: string;
+  focus?: string[];
+  platforms?: string[];
+  status: string;
+  featured: boolean;
+  created_at?: string;
+  updated_at?: string;
+  cover_image?: string;
+  summary?: string;
+  case_study_url?: string;
+  live_demo_url?: string;
+}
+
 export interface SkillItem {
   name: string;
   level: number;

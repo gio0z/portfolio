@@ -34,30 +34,30 @@ export const Hero: React.FC<HeroProps> = ({ profile }) => {
 
         {/* Supporting Paragraph */}
         <p className="text-base sm:text-lg text-zinc-600 max-w-2xl mx-auto leading-relaxed">
-          I'm a full-stack engineer and AI systems architect helping businesses grow through resilient Go backends, reactive Vite frontends, and autonomous multi-agent pipelines. Browse my work — the numbers do the talking.
+          I build the software behind growing businesses — the systems that take the orders, hold the data, and answer the customers. Careful engineering, no drama, and it keeps working after launch.
         </p>
       </div>
 
       {/* 2. Split Two-Column Feature Cards (50/50 Bento Grid) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
         {/* Left Column: Dark Pitch Card */}
-        <div className="lg:col-span-6 bg-[#18181B] text-white rounded-[32px] p-8 sm:p-12 flex flex-col justify-between shadow-xl relative overflow-hidden border border-white/5">
+        <div id="about" className="lg:col-span-6 bg-[#18181B] text-white rounded-[32px] p-8 sm:p-12 flex flex-col justify-between shadow-xl relative overflow-hidden border border-white/5 scroll-mt-28">
           {/* Top Tag & Header */}
           <div>
             <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide uppercase text-zinc-400 mb-6 font-mono">
               <span className="flex items-center justify-center w-4 h-4 rounded bg-blue-600 text-white">
                 <ArrowDownRight className="w-3 h-3" />
               </span>
-              <span>About the engineer</span>
+              <span>About me</span>
             </div>
 
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.1] mb-6">
-              <span>Systems first.</span> <br />
-              <span className="text-zinc-500 font-bold">Always.</span>
+              <span>One engineer,</span> <br />
+              <span className="text-zinc-500 font-bold">start to finish.</span>
             </h2>
 
             <p className="text-zinc-400 text-sm sm:text-base leading-relaxed mb-8 max-w-xl">
-              I lead projects of high-concurrency distributed backends and reactive web frontends from a clear foundation, combining strict performance criteria and visual sensitivity to build systems coherent and durable.
+              You talk directly to the person doing the work. No account managers, no handover gaps, and no rewrite in year two because nobody planned for it.
             </p>
 
             {/* Action Buttons */}
@@ -91,13 +91,13 @@ export const Hero: React.FC<HeroProps> = ({ profile }) => {
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-semibold text-white group-hover:text-blue-400 transition-colors line-clamp-2 leading-snug mb-1">
-                Increasing Microservice Concurrency from 10K to 50K RPS
+                Room booking system for Blitar Regency government
               </div>
               <a
                 href="#projects"
                 className="inline-flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
               >
-                <span>See Details</span>
+                <span>See how it works</span>
                 <ArrowDownRight className="w-3.5 h-3.5" />
               </a>
             </div>
@@ -121,26 +121,26 @@ export const Hero: React.FC<HeroProps> = ({ profile }) => {
             {/* Metric 1 */}
             <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-5 shadow-2xl border border-black/5">
               <div className="text-3xl sm:text-4xl font-extrabold text-zinc-900 tracking-tight mb-1">
-                3.8<span className="text-blue-600 font-bold">x</span>
+                9
               </div>
               <div className="text-xs font-medium text-zinc-600 mb-2 leading-tight">
-                Throughput efficiency across all Go microservices
+                Production systems delivered
               </div>
               <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md font-mono">
-                <span>↑ 64% above industry avg</span>
+                <span>Across government, retail, and travel</span>
               </div>
             </div>
 
             {/* Metric 2 */}
             <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-5 shadow-2xl border border-black/5">
               <div className="text-3xl sm:text-4xl font-extrabold text-zinc-900 tracking-tight mb-1">
-                +240<span className="text-blue-600 font-bold">%</span>
+                653
               </div>
               <div className="text-xs font-medium text-zinc-600 mb-2 leading-tight">
-                Velocity gain via TDD · average 6 months
+                Commits on live client work
               </div>
               <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md font-mono">
-                <span>↑ Sub-50ms p99 latency</span>
+                <span>Since 2026</span>
               </div>
             </div>
           </div>

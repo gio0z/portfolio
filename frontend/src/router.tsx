@@ -11,6 +11,7 @@ import { Footer } from './components/Footer';
 import { AdminLayout } from './admin/AdminLayout';
 import { AdminOverview } from './admin/AdminOverview';
 import { ReviewQueue } from './admin/ReviewQueue';
+import { ReviewDetail } from './admin/ReviewDetail';
 import type { Profile, Project } from './types';
 
 export function PortfolioShell() {
@@ -49,21 +50,17 @@ export function PortfolioShell() {
   );
 }
 
-function LabShellFallback() {
+const LazyLabCatalog = React.lazy(() => import('./lab/LabCatalog'));
+const LazyLabCaseStudy = React.lazy(() => import('./lab/LabCaseStudy'));
+
+export function LabShellFallback() {
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold">Design Lab</h1>
-      <p className="text-zinc-600">Design lab catalog</p>
+      <p className="text-zinc-600">Loading the redesign catalog…</p>
     </div>
   );
 }
-
-const LazyLabShell = React.lazy(
-  () =>
-    Promise.resolve({
-      default: LabShellFallback,
-    })
-);
 
 export function AppRouter() {
   return (
@@ -74,13 +71,22 @@ export function AppRouter() {
           <Route index element={<AdminOverview />} />
           <Route path="overview" element={<AdminOverview />} />
           <Route path="reviews" element={<ReviewQueue />} />
+          <Route path="reviews/:id" element={<ReviewDetail />} />
           <Route path="*" element={<AdminOverview />} />
         </Route>
         <Route
-          path="/lab/*"
+          path="/lab"
           element={
             <Suspense fallback={<LabShellFallback />}>
-              <LazyLabShell />
+              <LazyLabCatalog />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/lab/:slug"
+          element={
+            <Suspense fallback={<LabShellFallback />}>
+              <LazyLabCaseStudy />
             </Suspense>
           }
         />

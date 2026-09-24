@@ -534,3 +534,241 @@ func TestPublicAPI_MethodNotAllowed(t *testing.T) {
 		}
 	}
 }
+
+func TestPublicAPI_SourceURLsExposedForPublished(t *testing.T) {
+	ctx := context.Background()
+	db, err := publishing.OpenRegistry(":memory:")
+	if err != nil {
+		t.Fatalf("OpenRegistry: %v", err)
+	}
+	defer db.Close()
+	repo := publishing.NewSQLiteRepository(db)
+
+	now := time.Now().UTC()
+	want := []string{"https://source.example.com/app", "http://legacy.example.org/original"}
+
+	p := publishing.LabProject{
+		ID:              "lab-src",
+		Slug:            "with-source-urls",
+		Title:           "With Source URLs",
+		OriginalProduct: "Source App",
+		Disclaimer:      publishing.MandatoryDisclaimer,
+		Status:          "PUBLISHED",
+		SourceURLs:      want,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	if err := repo.CreateLabProject(ctx, p); err != nil {
+		t.Fatalf("CreateLabProject: %v", err)
+	}
+
+	handler := publicapi.NewHandlerWithRepo(repo)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	testCases := []struct {
+		name string
+		url  string
+	}{
+		{"list", "/api/lab/projects"},
+		{"by slug", "/api/lab/projects/with-source-urls"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.url, nil)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s: got status %d, want 200", tc.url, rec.Code)
+			}
+
+			var projects []publicapi.PublicLabProject
+			if tc.url == "/api/lab/projects" {
+				if err := json.Unmarshal(rec.Body.Bytes(), &projects); err != nil {
+					t.Fatalf("decode list: %v", err)
+				}
+			} else {
+				var single publicapi.PublicLabProject
+				if err := json.Unmarshal(rec.Body.Bytes(), &single); err != nil {
+					t.Fatalf("decode single: %v", err)
+				}
+				projects = []publicapi.PublicLabProject{single}
+			}
+
+			if len(projects) != 1 {
+				t.Fatalf("got %d projects, want 1", len(projects))
+			}
+			got := projects[0].SourceURLs
+			if len(got) != len(want) {
+				t.Fatalf("source_urls = %v, want %v", got, want)
+			}
+			for i := range want {
+				if got[i] != want[i] {
+					t.Errorf("source_urls[%d] = %q, want %q", i, got[i], want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestPublicAPI_SourceURLsAbsentWhenNotConfigured(t *testing.T) {
+	ctx := context.Background()
+	db, err := publishing.OpenRegistry(":memory:")
+	if err != nil {
+		t.Fatalf("OpenRegistry: %v", err)
+	}
+	defer db.Close()
+	repo := publishing.NewSQLiteRepository(db)
+
+	now := time.Now().UTC()
+	p := publishing.LabProject{
+		ID:              "lab-nosrc",
+		Slug:            "without-source-urls",
+		Title:           "Without Source URLs",
+		OriginalProduct: "Plain App",
+		Disclaimer:      publishing.MandatoryDisclaimer,
+		Status:          "PUBLISHED",
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	if err := repo.CreateLabProject(ctx, p); err != nil {
+		t.Fatalf("CreateLabProject: %v", err)
+	}
+
+	handler := publicapi.NewHandlerWithRepo(repo)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	testCases := []struct {
+		name string
+		url  string
+	}{
+		{"list", "/api/lab/projects"},
+		{"by slug", "/api/lab/projects/without-source-urls"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.url, nil)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s: got status %d, want 200", tc.url, rec.Code)
+			}
+
+			// The field must never be invented: absent config => no source_urls key.
+			if strings.Contains(rec.Body.String(), "source_urls") {
+				t.Errorf("GET %s: body unexpectedly contains source_urls: %s", tc.url, rec.Body.String())
+			}
+
+			var payload any
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if hasSourceURLsKey(payload) {
+				t.Errorf("GET %s: source_urls key present in decoded payload", tc.url)
+			}
+		})
+	}
+}
+
+func TestPublicAPI_SourceURLsHiddenForUnpublished(t *testing.T) {
+	ctx := context.Background()
+	db, err := publishing.OpenRegistry(":memory:")
+	if err != nil {
+		t.Fatalf("OpenRegistry: %v", err)
+	}
+	defer db.Close()
+	repo := publishing.NewSQLiteRepository(db)
+
+	now := time.Now().UTC()
+	projects := []publishing.LabProject{
+		{
+			ID:              "lab-src-draft",
+			Slug:            "draft-with-source-urls",
+			Title:           "Draft With Source URLs",
+			OriginalProduct: "Draft App",
+			Disclaimer:      publishing.MandatoryDisclaimer,
+			Status:          "DRAFT",
+			SourceURLs:      []string{"https://draft-secret.example.com/app"},
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+		{
+			ID:              "lab-src-review",
+			Slug:            "review-with-source-urls",
+			Title:           "Review With Source URLs",
+			OriginalProduct: "Review App",
+			Disclaimer:      publishing.MandatoryDisclaimer,
+			Status:          "IN_REVIEW",
+			SourceURLs:      []string{"https://review-secret.example.com/app"},
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		},
+	}
+	for _, p := range projects {
+		if err := repo.CreateLabProject(ctx, p); err != nil {
+			t.Fatalf("CreateLabProject %s: %v", p.ID, err)
+		}
+	}
+
+	handler := publicapi.NewHandlerWithRepo(repo)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/lab/projects", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	var listed []publicapi.PublicLabProject
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("got %d published projects, want 0", len(listed))
+	}
+
+	body := rec.Body.String()
+	for _, leaked := range []string{"draft-secret.example.com", "review-secret.example.com"} {
+		if strings.Contains(body, leaked) {
+			t.Errorf("list leaked unpublished source URL %q: %s", leaked, body)
+		}
+	}
+
+	for _, slug := range []string{"draft-with-source-urls", "review-with-source-urls"} {
+		reqSlug := httptest.NewRequest(http.MethodGet, "/api/lab/projects/"+slug, nil)
+		recSlug := httptest.NewRecorder()
+		mux.ServeHTTP(recSlug, reqSlug)
+		if recSlug.Code != http.StatusNotFound {
+			t.Errorf("GET %s: got status %d, want 404", slug, recSlug.Code)
+		}
+		if strings.Contains(recSlug.Body.String(), "-secret.example.com") {
+			t.Errorf("GET %s leaked source URL: %s", slug, recSlug.Body.String())
+		}
+	}
+}
+
+// hasSourceURLsKey reports whether a decoded JSON payload nests a source_urls key.
+func hasSourceURLsKey(v any) bool {
+	switch typed := v.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			if key == "source_urls" {
+				return true
+			}
+			if hasSourceURLsKey(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if hasSourceURLsKey(child) {
+				return true
+			}
+		}
+	}
+	return false
+}

@@ -19,17 +19,21 @@ type Actor struct {
 
 // LabProject is the durable identity and public metadata anchor for a design-lab project.
 type LabProject struct {
-	ID              string    `json:"id"`
-	Slug            string    `json:"slug"`
-	Title           string    `json:"title"`
-	OriginalProduct string    `json:"original_product"`
-	Disclaimer      string    `json:"disclaimer"`
-	Focus           []string  `json:"focus,omitempty"`
-	Platforms       []string  `json:"platforms,omitempty"`
-	Status          string    `json:"status"`
-	Featured        bool      `json:"featured"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID              string `json:"id"`
+	Slug            string `json:"slug"`
+	Title           string `json:"title"`
+	OriginalProduct string `json:"original_product"`
+	Disclaimer      string `json:"disclaimer"`
+	// SourceURLs are reference links to the follower-nominated source site.
+	// They are stored as inert metadata: never fetched, never executed, and
+	// only ever rendered as outbound links.
+	SourceURLs []string  `json:"source_urls,omitempty"`
+	Focus      []string  `json:"focus,omitempty"`
+	Platforms  []string  `json:"platforms,omitempty"`
+	Status     string    `json:"status"`
+	Featured   bool      `json:"featured"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // PortfolioMetadata describes how an approved project appears publicly.

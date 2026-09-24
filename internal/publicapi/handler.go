@@ -38,6 +38,9 @@ type PublicLabProject struct {
 	Summary         string    `json:"summary,omitempty"`
 	CaseStudyURL    string    `json:"case_study_url,omitempty"`
 	LiveDemoURL     string    `json:"live_demo_url,omitempty"`
+	// SourceURLs are inert outbound reference links to the third-party source
+	// site. They are stored as metadata only and are never fetched or executed.
+	SourceURLs []string `json:"source_urls,omitempty"`
 }
 
 // ProjectReader queries published lab projects.
@@ -137,6 +140,7 @@ func cleanPublicProject(p publishing.LabProject) PublicLabProject {
 		Featured:        p.Featured,
 		CreatedAt:       p.CreatedAt,
 		UpdatedAt:       p.UpdatedAt,
+		SourceURLs:      p.SourceURLs,
 	}
 }
 

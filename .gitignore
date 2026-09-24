@@ -30,6 +30,12 @@ dist/
 .env.local
 .env.*.local
 
+# Publishing runtime data (registry, artifacts, previews, Lab/portfolio versions)
+var/
+*.sqlite
+*.sqlite3
+*.db
+
 # OS / Editor files
 .DS_Store
 Thumbs.db

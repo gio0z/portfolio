@@ -4,19 +4,19 @@ import { ArrowDownRight, Search, GitFork, BarChart3 } from 'lucide-react';
 export const PhilosophySection: React.FC = () => {
   const pillars = [
     {
-      title: 'System Audits',
+      title: 'Look before building',
       icon: <Search className="w-8 h-8 text-zinc-400 stroke-[1.75]" />,
-      description: 'Identify gaps and bottlenecks in your current backend architecture to optimize concurrency, throughput, and system reliability.',
+      description: 'I map what already exists and where it breaks, so the fix targets the real bottleneck instead of the loudest one.',
     },
     {
-      title: 'High-Concurrency Engines',
+      title: 'Build for the busy day',
       icon: <GitFork className="w-8 h-8 text-zinc-400 stroke-[1.75]" />,
-      description: 'Build scalable Go microservices and automated event pipelines that handle high-volume distributed requests with zero jitter.',
+      description: 'Design for your peak, not your average. The system should stay correct when traffic is ten times normal.',
     },
     {
-      title: 'Data-Driven ROI & TDD',
+      title: 'Prove it works',
       icon: <BarChart3 className="w-8 h-8 text-zinc-400 stroke-[1.75]" />,
-      description: 'Transform complex domain logic into disciplined red-green tests and measurable business impact for faster, deterministic releases.',
+      description: 'Every change lands with tests that fail without it, so progress is measured rather than assumed.',
     },
   ];
 
@@ -28,16 +28,16 @@ export const PhilosophySection: React.FC = () => {
           <span className="flex items-center justify-center w-4 h-4 rounded bg-blue-600 text-white">
             <ArrowDownRight className="w-3 h-3" />
           </span>
-          <span>My Philosophy</span>
+          <span>How I Work</span>
         </div>
 
         <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-zinc-900 leading-[1.1] mb-6">
-          <span>Architect-Led</span> <br />
-          <span className="text-zinc-400 font-bold">Built On Data & TDD</span>
+          <span>Built to last,</span> <br />
+          <span className="text-zinc-400 font-bold">not just to ship.</span>
         </h2>
 
         <p className="text-base sm:text-lg text-zinc-600 leading-relaxed max-w-2xl mx-auto">
-          I Don't Just Write Code; I Build Resilient Systems Backed By Rigorous Analysis and Verification To Ensure Your Objectives Are Met With Precision.
+          Anyone can make software work once. The job is making it keep working — after the launch, after the next feature, after you hand it to someone else.
         </p>
       </div>
 
