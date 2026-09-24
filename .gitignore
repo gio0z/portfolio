@@ -1,5 +1,7 @@
 # Worktrees
 .worktrees/
+# Agent working notes (task reports, scratch output)
+.superpowers/
 
 # Binaries for programs and plugins
 *.exe

@@ -3,7 +3,6 @@
 # output contract of the prerendered site.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-export PATH="/home/regio/.local/share/mise/installs/go/latest/bin:$PATH"
 
 # The Astro build fails closed without a canonical origin, because a wrong
 # canonical points search engines at a host this project does not control.

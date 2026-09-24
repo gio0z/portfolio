@@ -1,0 +1,40 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# The repository is public and has no other automation, so this is the only
+# thing that keeps the verification gate honest. It runs the same script a
+# developer runs locally, so a green badge and a green local run mean the same
+# thing.
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          # Matches go 1.23.0 in go.mod. The main checkout builds with a newer
+          # Go, but CI must prove the declared minimum still works.
+          go-version: '1.23'
+          cache: true
+
+      - uses: actions/setup-node@v5
+        with:
+          # Astro 7 requires Node >= 22.12.0.
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      # Runs the whole gate: race tests, vet, frontend tests, the Astro build,
+      # the static output contract, and the end-to-end publishing flow.
+      - name: Verification gate
+        run: bash scripts/run-publishing-e2e.sh
