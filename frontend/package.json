@@ -16,13 +16,11 @@
   "dependencies": {
     "@astrojs/react": "^7.0.0",
     "@astrojs/sitemap": "^3.7.4",
-    "@types/three": "^0.185.4",
     "astro": "^7.3.4",
     "lucide-react": "^1.39.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.3",
-    "three": "^0.185.1"
+    "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
