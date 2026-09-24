@@ -5,10 +5,20 @@ import sitemap from '@astrojs/sitemap'
 import tailwindcss from '@tailwindcss/vite'
 
 // Canonical origin for <link rel="canonical"> and sitemap entries. It must
-// match PORTFOLIO_PUBLIC_ORIGIN, which the Go API uses as the same identity;
-// the fallback keeps local builds honest rather than silently emitting
-// localhost URLs into the sitemap.
-const site = process.env.PORTFOLIO_PUBLIC_ORIGIN || 'https://regiodanipangestu.com'
+// match PORTFOLIO_PUBLIC_ORIGIN, which the Go API uses for the same identity.
+//
+// This fails closed rather than defaulting to a placeholder host. A wrong
+// canonical is worse than a build error: it tells search engines that the real
+// pages live somewhere else, and nothing downstream would notice. Local builds
+// that do not care about the origin can set PORTFOLIO_PUBLIC_ORIGIN=http://localhost:4321.
+const rawSite = process.env.PORTFOLIO_PUBLIC_ORIGIN
+if (!rawSite) {
+  throw new Error(
+    'PORTFOLIO_PUBLIC_ORIGIN is required to build: it becomes the canonical URL ' +
+      'and sitemap origin. Example: PORTFOLIO_PUBLIC_ORIGIN=https://your-domain.example',
+  )
+}
+const site = rawSite.replace(/\/+$/, '')
 
 export default defineConfig({
   site,

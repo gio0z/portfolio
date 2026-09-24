@@ -5,6 +5,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="/home/regio/.local/share/mise/installs/go/latest/bin:$PATH"
 
+# The Astro build fails closed without a canonical origin, because a wrong
+# canonical points search engines at a host this project does not control.
+# Local gate runs get an explicit localhost origin; deploys set the real one.
+export PORTFOLIO_PUBLIC_ORIGIN="${PORTFOLIO_PUBLIC_ORIGIN:-http://localhost:8080}"
+
 # The committed frontend content must match the Go source it is derived from.
 # Checked before the build, because npm run build regenerates it and would
 # otherwise mask a stale file.
