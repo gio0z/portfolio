@@ -51,15 +51,24 @@ HEALTH_URL="$BASE_URL/api/health"
 
 cd "$REPO"
 
-BEFORE=$(git rev-parse HEAD 2>/dev/null || echo none)
-git fetch --quiet origin main
-AFTER=$(git rev-parse origin/main)
-if [ "$BEFORE" = "$AFTER" ]; then
-    exit 0  # nothing new; the timer runs every minute, so this is the common path
+# Update the working tree first, then continue in the checked-out copy of this
+# script. Without the re-exec, `git reset --hard` replaces this file while it is
+# still being read: bash keeps executing the old bytes, so a run that deploys a
+# fix to this very script still behaves like the version it just replaced.
+if [ -z "${PORTFOLIO_DEPLOY_UPDATED:-}" ]; then
+    BEFORE=$(git rev-parse HEAD 2>/dev/null || echo none)
+    git fetch --quiet origin main
+    AFTER=$(git rev-parse origin/main)
+    if [ "$BEFORE" = "$AFTER" ]; then
+        exit 0  # nothing new; the timer runs every minute, so this is the common path
+    fi
+    log "deploying $BEFORE..$AFTER"
+    git reset --hard --quiet origin/main
+    export PORTFOLIO_DEPLOY_UPDATED="$AFTER"
+    exec bash "$REPO/deploy/deploy.sh"
 fi
-log "deploying $BEFORE..$AFTER"
 
-git reset --hard --quiet origin/main
+log "running the checked-out deploy script at $PORTFOLIO_DEPLOY_UPDATED"
 
 # 1. Frontend. `npm run build` regenerates the content JSON from pkg/api first,
 #    so the build cannot use a stale copy of the site content. That prebuild step
