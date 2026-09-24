@@ -248,6 +248,17 @@ both only fail under systemd, never in an interactive SSH session.
    If that second line is missing, an older script is still in charge — which is
    expected exactly once after changing this file.
 
+4. **A failure that is not an explicit check exits silently.** With `set -u`, an
+   unset variable prints one short line and exits; the journal then shows a
+   failed unit with no visible reason. That looked exactly like a successful
+   no-op run, and it masked a real failure: the re-exec refactor moved
+   `BEFORE`/`AFTER` into the first-run block but left two later references, so
+   every re-executed run died *after* the build had succeeded and the service had
+   already restarted — the site was correct while the script reported failure and
+   never printed its success line. The deploy line now uses `DEPLOYED_SHA`, set
+   on both paths, and an ERR trap prints the line number for anything that is not
+   an explicit `fail`.
+
 If a deploy fails, the previous binary keeps serving: the script builds to
 `portfolio-server.new` and moves it into place only after the build succeeds, and
 a failed health check aborts before the unit is restarted.
