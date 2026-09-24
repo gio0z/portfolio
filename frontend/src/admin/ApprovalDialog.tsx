@@ -22,7 +22,7 @@ export function ApprovalDialog({
 
   const isConfirmed = stepUpText.trim() === 'CONFIRM';
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault();
     if (!isConfirmed || isSubmitting) return;
     await onConfirm();

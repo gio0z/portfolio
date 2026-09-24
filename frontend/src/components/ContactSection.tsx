@@ -30,7 +30,7 @@ export const ContactSection: React.FC = () => {
     };
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
