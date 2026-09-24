@@ -12,7 +12,11 @@ export interface Profile {
   location: string;
   status: string;
   email: string;
-  phone: string;
+  /**
+   * The public API marks the phone number `json:"-"` so it is never scrapeable,
+   * which means the field is absent rather than empty in the payload.
+   */
+  phone?: string;
   avatar: string;
   stats: StatMetric[];
   social_links: Record<string, string>;

@@ -1,0 +1,39 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { ContactSection } from '../components/ContactSection.tsx'
+import { profile } from '../data/portfolio'
+import { pageTitle, buildPageMeta } from '../lib/seo'
+
+const origin = (Astro.site ?? Astro.url).origin
+const meta = buildPageMeta({
+  origin,
+  path: '/contact',
+  title: pageTitle('Contact'),
+  description:
+    'Start a conversation about a system you need built, replaced, or kept running. One engineer, from first conversation to production.',
+})
+---
+
+<BaseLayout
+  title={meta.title}
+  description={meta.description}
+  canonical={meta.canonical}
+  ogType={meta.ogType}
+>
+  <section class="px-4 sm:px-8 max-w-4xl mx-auto pt-12 sm:pt-20 pb-8">
+    <p class="text-xs font-semibold tracking-wider uppercase text-zinc-500 mb-6 font-mono">Contact</p>
+
+    <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-zinc-900 leading-[1.08] mb-6">
+      Tell me what you need built
+    </h1>
+    <p class="text-base sm:text-lg text-zinc-600 leading-relaxed mb-6">
+      Describe the system, the constraints, and what happens if it does not get built. You will get
+      a straight answer about whether I am the right person for it.
+    </p>
+    <p class="text-sm text-zinc-500 font-mono mb-4">
+      Based in {profile.location}. {profile.status}.
+    </p>
+  </section>
+
+  <ContactSection client:load />
+</BaseLayout>

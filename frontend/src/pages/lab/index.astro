@@ -1,0 +1,24 @@
+---
+// The Design Lab is client-routed: its case studies are addressed at
+// /lab/<slug> and resolved with useParams, and its catalog is runtime registry
+// data. It is served as one shell for every /lab/* path.
+//
+// noindex is deliberate: the shell itself carries no content, and indexing an
+// empty document would advertise a page that never renders for a crawler that
+// does not execute JavaScript.
+import '../../index.css'
+import IslandRouter from '../../islands/IslandRouter.tsx'
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Design Lab — Regio Dani Pangestu</title>
+  </head>
+  <body class="bg-[#F8F9FA] text-[#18181B] antialiased">
+    <IslandRouter client:only="react" />
+  </body>
+</html>

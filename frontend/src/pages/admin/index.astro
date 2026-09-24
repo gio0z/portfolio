@@ -1,0 +1,20 @@
+---
+// The admin area is an authenticated application, not a document. It is
+// client-only because it depends on the session cookie and its data is
+// runtime state, and it is noindex because there is nothing here to index.
+import '../../index.css'
+import IslandRouter from '../../islands/IslandRouter.tsx'
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Admin — Regio Dani Pangestu</title>
+  </head>
+  <body class="bg-[#F8F9FA] text-[#18181B] antialiased">
+    <IslandRouter client:only="react" />
+  </body>
+</html>

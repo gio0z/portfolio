@@ -4,5 +4,10 @@
   "rules": {
     "react/rules-of-hooks": "error",
     "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+  },
+  "ignorePatterns": [
+    ".astro",
+    "dist",
+    "node_modules"
+  ]
 }

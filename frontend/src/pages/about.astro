@@ -1,0 +1,94 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { profile } from '../data/portfolio'
+import { pageTitle, buildPageMeta, personJsonLd } from '../lib/seo'
+
+const origin = (Astro.site ?? Astro.url).origin
+const meta = buildPageMeta({
+  origin,
+  path: '/about',
+  title: pageTitle('About'),
+  description: profile.bio,
+  image: profile.avatar,
+})
+---
+
+<BaseLayout
+  title={meta.title}
+  description={meta.description}
+  canonical={meta.canonical}
+  ogType={meta.ogType}
+  ogImage={meta.image}
+  jsonLd={personJsonLd(profile, origin)}
+>
+  <article class="px-4 sm:px-8 max-w-4xl mx-auto pt-12 sm:pt-20 pb-24">
+    <p class="text-xs font-semibold tracking-wider uppercase text-zinc-500 mb-6 font-mono">About</p>
+
+    <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-zinc-900 leading-[1.08] mb-8">
+      {profile.name}
+    </h1>
+
+    <p class="text-lg sm:text-xl text-zinc-600 leading-relaxed mb-4">{profile.tagline}.</p>
+    <p class="text-base sm:text-lg text-zinc-600 leading-relaxed mb-12">{profile.bio}</p>
+
+    <dl class="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-14">
+      {
+        profile.stats.map((stat) => (
+          <div class="bg-white rounded-2xl p-5 border border-zinc-200/90">
+            <dt class="text-xs font-mono uppercase tracking-wider text-zinc-500 mb-2">{stat.label}</dt>
+            <dd class="text-3xl font-extrabold text-zinc-900 tracking-tight">{stat.value}</dd>
+            <dd class="text-xs text-zinc-500 mt-1">{stat.sub}</dd>
+          </div>
+        ))
+      }
+    </dl>
+
+    <section class="mb-14">
+      <h2 class="text-2xl font-bold text-zinc-900 tracking-tight mb-6">How I work</h2>
+      <ul class="space-y-4">
+        {
+          profile.highlights.map((highlight) => (
+            <li class="flex gap-3 text-zinc-700 leading-relaxed">
+              <span class="mt-2 w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+              <span>{highlight}</span>
+            </li>
+          ))
+        }
+        <li class="flex gap-3 text-zinc-700 leading-relaxed">
+          <span class="mt-2 w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+          <span>
+            One engineer from the first conversation to production, so nothing is lost in a handover.
+          </span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="mb-14">
+      <h2 class="text-2xl font-bold text-zinc-900 tracking-tight mb-6">Where</h2>
+      <p class="text-zinc-700 leading-relaxed">
+        Based in {profile.location}, working with clients across the Blitar region and beyond.
+        Status: <span class="font-semibold text-zinc-900">{profile.status}</span>.
+      </p>
+    </section>
+
+    <nav aria-label="Elsewhere" class="flex flex-wrap gap-3">
+      {
+        Object.entries(profile.social_links).map(([name, url]) => (
+          <a
+            href={url}
+            rel="me noopener"
+            class="px-5 py-2.5 rounded-full bg-white border border-zinc-200/90 text-sm font-semibold text-zinc-800 hover:border-blue-500/50 hover:text-blue-600 transition-colors"
+          >
+            {name}
+          </a>
+        ))
+      }
+      <a
+        href="/work/"
+        class="px-5 py-2.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors"
+      >
+        See the work &rarr;
+      </a>
+    </nav>
+  </article>
+</BaseLayout>

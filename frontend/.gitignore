@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+# Astro generated types and content cache
+.astro
 
 # Editor directories and files
 .vscode/*

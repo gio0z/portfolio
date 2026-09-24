@@ -1,0 +1,102 @@
+---
+import '../index.css'
+import { SITE_NAME } from '../lib/seo'
+
+interface Props {
+  title: string
+  description: string
+  canonical: string
+  ogType?: string
+  ogImage?: string
+  jsonLd?: string
+}
+
+const { title, description, canonical, ogType = 'website', ogImage, jsonLd } = Astro.props
+
+// Trailing-slash paths mean ./ resolves to the page itself, not its parent.
+const favicon =
+  "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='28' fill='%232563eb'/><text x='50' y='66' font-size='52' font-family='sans-serif' font-weight='800' text-anchor='middle' fill='white'>R</text></svg>"
+
+const navLinks = [
+  { name: 'Home', href: '/' },
+  { name: 'About', href: '/about/' },
+  { name: 'Work', href: '/work/' },
+  { name: 'Services', href: '/services/' },
+  { name: 'Contact', href: '/contact/' },
+]
+---
+
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    <meta property="og:type" content={ogType} />
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    {ogImage && <meta property="og:image" content={ogImage} />}
+
+    <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    {ogImage && <meta name="twitter:image" content={ogImage} />}
+
+    {jsonLd && <script type="application/ld+json" is:inline set:html={jsonLd} />}
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="bg-[#F8F9FA] text-[#18181B] antialiased selection:bg-blue-600 selection:text-white">
+    <div class="min-h-screen flex flex-col">
+      <header class="sticky top-4 z-50 px-4 sm:px-8 max-w-7xl mx-auto w-full">
+        <div
+          class="bg-[#18181B] text-white rounded-2xl sm:rounded-full px-5 sm:px-7 py-3.5 flex items-center justify-between shadow-2xl shadow-black/15 border border-white/5"
+        >
+          <a href="/" class="flex items-center gap-1 group">
+            <span class="font-extrabold text-xl tracking-tight text-blue-500 group-hover:text-blue-400 transition-colors">
+              regio<span class="text-white">.</span>
+            </span>
+          </a>
+
+          <nav aria-label="Main" class="hidden md:flex items-center gap-8">
+            {
+              navLinks.map((link) => (
+                <a
+                  href={link.href}
+                  class="text-sm font-medium text-zinc-300 hover:text-white transition-colors duration-150"
+                >
+                  {link.name}
+                </a>
+              ))
+            }
+          </nav>
+        </div>
+      </header>
+
+      <main class="flex-grow">
+        <slot />
+      </main>
+
+      <footer class="py-12 px-4 sm:px-8 max-w-7xl mx-auto w-full border-t border-zinc-200 text-zinc-500 text-xs sm:text-sm">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-base text-blue-600 tracking-tight">regio.</span>
+            <span>&copy; {new Date().getFullYear()} {SITE_NAME}. All rights reserved.</span>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

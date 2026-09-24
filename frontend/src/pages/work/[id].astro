@@ -1,0 +1,121 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import { projects } from '../../data/portfolio'
+import { pageTitle, buildPageMeta, creativeWorkJsonLd } from '../../lib/seo'
+
+// One prerendered document per project, generated from the exported content.
+export function getStaticPaths() {
+  return projects.map((project) => ({
+    params: { id: project.id },
+    props: { project },
+  }))
+}
+
+const { project } = Astro.props
+const origin = (Astro.site ?? Astro.url).origin
+const meta = buildPageMeta({
+  origin,
+  path: `/work/${project.id}`,
+  title: pageTitle(project.title),
+  description: project.tagline,
+  type: 'article',
+  image: project.image,
+})
+
+const others = projects.filter((candidate) => candidate.id !== project.id).slice(0, 3)
+---
+
+<BaseLayout
+  title={meta.title}
+  description={meta.description}
+  canonical={meta.canonical}
+  ogType={meta.ogType}
+  ogImage={meta.image}
+  jsonLd={creativeWorkJsonLd(project, origin)}
+>
+  <article class="px-4 sm:px-8 max-w-4xl mx-auto pt-12 sm:pt-20 pb-24">
+    <a
+      href="/work/"
+      class="inline-flex items-center gap-2 text-xs font-semibold font-mono text-zinc-500 hover:text-blue-600 transition-colors mb-10"
+    >
+      &larr; All work
+    </a>
+
+    <p class="text-xs font-semibold tracking-wider uppercase text-zinc-500 mb-4 font-mono">
+      {project.category}
+    </p>
+
+    <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-zinc-900 leading-[1.08] mb-6">
+      {project.title}
+    </h1>
+
+    <p class="text-lg sm:text-xl text-zinc-600 leading-relaxed mb-10">{project.tagline}</p>
+
+    <img
+      src={project.image}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      class="w-full h-64 sm:h-96 object-cover rounded-[28px] border border-zinc-200/90 mb-12"
+    />
+
+    <div class="bg-white rounded-[28px] p-7 sm:p-9 border border-zinc-200/90 mb-12">
+      <h2 class="text-xs font-mono uppercase tracking-wider text-zinc-500 mb-3">What it does</h2>
+      <p class="text-base sm:text-lg text-zinc-700 leading-relaxed">{project.description}</p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
+      <div class="bg-white rounded-2xl p-6 border border-zinc-200/90">
+        <h2 class="text-xs font-mono uppercase tracking-wider text-zinc-500 mb-3">Outcome</h2>
+        <p class="text-zinc-800 leading-relaxed font-medium">{project.metrics}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-6 border border-zinc-200/90">
+        <h2 class="text-xs font-mono uppercase tracking-wider text-zinc-500 mb-3">Stack</h2>
+        <ul class="flex flex-wrap gap-1.5">
+          {
+            project.tags.map((tag) => (
+              <li class="px-2.5 py-1 rounded-md bg-zinc-100 text-[10px] font-mono text-zinc-600">
+                {tag}
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-3 mb-16">
+      <a
+        href={project.github_url}
+        rel="noopener"
+        class="px-5 py-2.5 rounded-full bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold transition-colors"
+      >
+        Source on GitHub
+      </a>
+      <a
+        href="/contact/"
+        class="px-5 py-2.5 rounded-full bg-white border border-zinc-200/90 text-sm font-semibold text-zinc-800 hover:border-blue-500/50 hover:text-blue-600 transition-colors"
+      >
+        Discuss something similar
+      </a>
+    </div>
+
+    <section>
+      <h2 class="text-2xl font-bold text-zinc-900 tracking-tight mb-6">More work</h2>
+      <ul class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        {
+          others.map((other) => (
+            <li>
+              <a
+                href={`/work/${other.id}/`}
+                class="block h-full bg-white rounded-2xl p-6 border border-zinc-200/90 hover:border-blue-500/40 hover:shadow-xl transition-all duration-300"
+              >
+                <h3 class="font-bold text-zinc-900 tracking-tight mb-2">{other.title}</h3>
+                <p class="text-sm text-zinc-600 leading-relaxed">{other.tagline}</p>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+  </article>
+</BaseLayout>

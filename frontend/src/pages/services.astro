@@ -1,0 +1,93 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { skillCategories } from '../data/portfolio'
+import { pageTitle, buildPageMeta } from '../lib/seo'
+
+const origin = (Astro.site ?? Astro.url).origin
+const meta = buildPageMeta({
+  origin,
+  path: '/services',
+  title: pageTitle('Services'),
+  description:
+    'The four areas I work in: backend and systems, frontend engineering, AI and autonomous agents, and DevOps and infrastructure.',
+})
+
+/** Categories are addressed by anchor, so the slug must be stable. */
+const anchorFor = (category: string) =>
+  category
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+---
+
+<BaseLayout
+  title={meta.title}
+  description={meta.description}
+  canonical={meta.canonical}
+  ogType={meta.ogType}
+>
+  <section class="px-4 sm:px-8 max-w-7xl mx-auto pt-12 sm:pt-20 pb-24">
+    <p class="text-xs font-semibold tracking-wider uppercase text-zinc-500 mb-6 font-mono">Services</p>
+
+    <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-zinc-900 leading-[1.08] mb-6">
+      What I can build for you
+    </h1>
+    <p class="text-base sm:text-lg text-zinc-600 max-w-2xl leading-relaxed mb-10">
+      Four areas of practice. Each one is something I have shipped to production, not a capability
+      list copied from a framework homepage.
+    </p>
+
+    <nav aria-label="Service categories" class="flex flex-wrap gap-2 mb-16">
+      {
+        skillCategories.map((category) => (
+          <a
+            href={`#${anchorFor(category.category)}`}
+            class="px-4 py-2 rounded-full bg-white border border-zinc-200/90 text-xs font-semibold font-mono text-zinc-700 hover:border-blue-500/50 hover:text-blue-600 transition-colors"
+          >
+            {category.category}
+          </a>
+        ))
+      }
+    </nav>
+
+    <div class="space-y-8">
+      {
+        skillCategories.map((category) => (
+          <section
+            id={anchorFor(category.category)}
+            class="scroll-mt-28 bg-white rounded-[28px] p-7 sm:p-10 border border-zinc-200/90"
+          >
+            <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-zinc-900 mb-3">
+              {category.category}
+            </h2>
+            <p class="text-zinc-600 leading-relaxed mb-8 max-w-2xl">{category.summary}</p>
+
+            <ul class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {category.skills.map((skill) => (
+                <li class="border-l-2 border-blue-600/30 pl-5">
+                  <div class="flex items-baseline justify-between gap-3 mb-1.5">
+                    <h3 class="font-bold text-zinc-900 tracking-tight">{skill.name}</h3>
+                    <span class="text-[10px] font-mono uppercase tracking-wider text-blue-600 shrink-0">
+                      {skill.proficiency}
+                    </span>
+                  </div>
+                  <p class="text-sm text-zinc-600 leading-relaxed">{skill.description}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      }
+    </div>
+
+    <div class="mt-14 text-center">
+      <a
+        href="/contact/"
+        class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition-all duration-200 shadow-md shadow-blue-600/20"
+      >
+        Tell me what you need built
+      </a>
+    </div>
+  </section>
+</BaseLayout>

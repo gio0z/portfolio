@@ -1,0 +1,90 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { Hero } from '../components/Hero.tsx'
+import { TrustBar } from '../components/TrustBar.tsx'
+import { PhilosophySection } from '../components/PhilosophySection.tsx'
+import { ExpertiseSection } from '../components/ExpertiseSection.tsx'
+import { CoverflowSection } from '../components/CoverflowSection.tsx'
+
+import { profile, projects } from '../data/portfolio'
+import { SITE_TITLE, buildPageMeta, personJsonLd } from '../lib/seo'
+
+// Astro.site is the canonical origin from astro.config; Astro.url is the local
+// fallback during development.
+const origin = (Astro.site ?? Astro.url).origin
+const meta = buildPageMeta({
+  origin,
+  path: '/',
+  title: SITE_TITLE,
+  description: `${profile.tagline}. ${profile.bio}`,
+  image: profile.avatar,
+})
+---
+
+<BaseLayout
+  title={meta.title}
+  description={meta.description}
+  canonical={meta.canonical}
+  ogType={meta.ogType}
+  ogImage={meta.image}
+  jsonLd={personJsonLd(profile, origin)}
+>
+  <Hero profile={profile} />
+  <TrustBar />
+  <PhilosophySection />
+  <ExpertiseSection client:visible />
+
+  <CoverflowSection client:visible projects={projects} />
+
+  <section class="py-20 sm:py-24 px-4 sm:px-8 max-w-7xl mx-auto">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <a
+        href="/about/"
+        class="group bg-white rounded-[28px] p-8 border border-zinc-200/90 shadow-sm hover:shadow-2xl hover:border-blue-500/40 hover:-translate-y-1.5 transition-all duration-300"
+      >
+        <h2 class="text-xl font-bold text-zinc-900 mb-3 tracking-tight">About</h2>
+        <p class="text-sm text-zinc-600 leading-relaxed">
+          How I work, what I have shipped, and the standards I hold a release to.
+        </p>
+        <span class="inline-block mt-6 text-xs font-semibold font-mono text-blue-600 group-hover:text-blue-500">
+          Read the background &rarr;
+        </span>
+      </a>
+
+      <a
+        href="/work/"
+        class="group bg-white rounded-[28px] p-8 border border-zinc-200/90 shadow-sm hover:shadow-2xl hover:border-blue-500/40 hover:-translate-y-1.5 transition-all duration-300"
+      >
+        <h2 class="text-xl font-bold text-zinc-900 mb-3 tracking-tight">Work</h2>
+        <p class="text-sm text-zinc-600 leading-relaxed">
+          Six production systems, with the problem each one solves and what it replaced.
+        </p>
+        <span class="inline-block mt-6 text-xs font-semibold font-mono text-blue-600 group-hover:text-blue-500">
+          See all six &rarr;
+        </span>
+      </a>
+
+      <a
+        href="/services/"
+        class="group bg-white rounded-[28px] p-8 border border-zinc-200/90 shadow-sm hover:shadow-2xl hover:border-blue-500/40 hover:-translate-y-1.5 transition-all duration-300"
+      >
+        <h2 class="text-xl font-bold text-zinc-900 mb-3 tracking-tight">Services</h2>
+        <p class="text-sm text-zinc-600 leading-relaxed">
+          The four areas I work in, from backend systems to automation and infrastructure.
+        </p>
+        <span class="inline-block mt-6 text-xs font-semibold font-mono text-blue-600 group-hover:text-blue-500">
+          See capabilities &rarr;
+        </span>
+      </a>
+    </div>
+
+    <div class="mt-10 text-center">
+      <a
+        href="/contact/"
+        class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition-all duration-200 shadow-md shadow-blue-600/20"
+      >
+        Start a conversation
+      </a>
+    </div>
+  </section>
+</BaseLayout>

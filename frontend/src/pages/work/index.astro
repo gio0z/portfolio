@@ -1,0 +1,76 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import { projects } from '../../data/portfolio'
+import { pageTitle, buildPageMeta } from '../../lib/seo'
+
+const origin = (Astro.site ?? Astro.url).origin
+const meta = buildPageMeta({
+  origin,
+  path: '/work',
+  title: pageTitle('Work'),
+  description:
+    'Six production systems, with the problem each one solves, the stack it runs on, and what it replaced.',
+})
+---
+
+<BaseLayout
+  title={meta.title}
+  description={meta.description}
+  canonical={meta.canonical}
+  ogType={meta.ogType}
+>
+  <section class="px-4 sm:px-8 max-w-7xl mx-auto pt-12 sm:pt-20 pb-24">
+    <p class="text-xs font-semibold tracking-wider uppercase text-zinc-500 mb-6 font-mono">Work</p>
+
+    <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-zinc-900 leading-[1.08] mb-6">
+      Systems in production
+    </h1>
+    <p class="text-base sm:text-lg text-zinc-600 max-w-2xl leading-relaxed mb-16">
+      Each one is running for a real organisation, with the constraints that came with it. No
+      demos, no clone projects.
+    </p>
+
+    <ul class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+      {
+        projects.map((project) => (
+          <li class="h-full">
+            <a
+              href={`/work/${project.id}/`}
+              class="group h-full flex flex-col bg-white rounded-[28px] overflow-hidden border border-zinc-200/90 shadow-sm hover:shadow-2xl hover:border-blue-500/40 hover:-translate-y-1.5 transition-all duration-300"
+            >
+              <div class="relative h-48 overflow-hidden bg-zinc-100">
+                <img
+                  src={project.image}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+                <span class="absolute top-4 left-4 px-3 py-1 rounded-full bg-black/70 backdrop-blur text-[10px] font-mono uppercase tracking-wider text-white">
+                  {project.category}
+                </span>
+              </div>
+
+              <div class="flex flex-col flex-grow p-6 sm:p-7">
+                <h2 class="text-xl font-bold text-zinc-900 tracking-tight mb-2">{project.title}</h2>
+                <p class="text-sm text-zinc-600 leading-relaxed mb-5 flex-grow">{project.tagline}</p>
+
+                <ul class="flex flex-wrap gap-1.5 mb-5">
+                  {project.tags.slice(0, 4).map((tag) => (
+                    <li class="px-2.5 py-1 rounded-md bg-zinc-100 text-[10px] font-mono text-zinc-600">
+                      {tag}
+                    </li>
+                  ))}
+                </ul>
+
+                <span class="text-xs font-semibold font-mono text-blue-600 group-hover:text-blue-500">
+                  Read the case study &rarr;
+                </span>
+              </div>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</BaseLayout>
