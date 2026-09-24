@@ -31,6 +31,13 @@ export GOMODCACHE="${GOMODCACHE:-$GOPATH/pkg/mod}"
 log() { printf '[%s] %s\n' "$LOG_TAG" "$*"; }
 fail() { printf '[%s] FATAL: %s\n' "$LOG_TAG" "$*" >&2; exit 1; }
 
+# A failure that is not one of the explicit checks below (an unset variable under
+# `set -u`, a missing binary, a permission error) would otherwise exit silently:
+# the journal would show a failed unit with no reason, which is indistinguishable
+# from a successful no-op run at a glance. That silence previously hid a real
+# failure, so it is worth a line.
+trap 'printf "[%s] FATAL: unexpected error at line %s\n" "$LOG_TAG" "$LINENO" >&2' ERR
+
 [ -d "$REPO/.git" ] || fail "$REPO is not a git checkout"
 [ -f "$ENV_FILE" ] || fail "$ENV_FILE missing; refusing to deploy without configuration"
 [ -x "$GO_BIN" ] || fail "$GO_BIN not found; run the bootstrap step in deploy/README.md"
@@ -69,6 +76,7 @@ if [ -z "${PORTFOLIO_DEPLOY_UPDATED:-}" ]; then
 fi
 
 log "running the checked-out deploy script at $PORTFOLIO_DEPLOY_UPDATED"
+DEPLOYED_SHA="$PORTFOLIO_DEPLOY_UPDATED"
 
 # 1. Frontend. `npm run build` regenerates the content JSON from pkg/api first,
 #    so the build cannot use a stale copy of the site content. That prebuild step
@@ -108,7 +116,7 @@ for _ in $(seq 1 30); do
     if curl -sf --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then ok=1; break; fi
     sleep 2
 done
-[ "$ok" = "1" ] || fail "health check failed after deploying $AFTER"
+[ "$ok" = "1" ] || fail "health check failed after deploying $DEPLOYED_SHA"
 
 # 5. The static contract, checked on the running service: the pages must be
 #    served as their own documents, not as a fallback shell.
@@ -116,4 +124,4 @@ for path in / /about/ /work/ /services/ /contact/; do
     curl -sf --max-time 5 "$BASE_URL$path" >/dev/null || fail "$path not served"
 done
 
-log "deployed $AFTER, health OK"
+log "deployed $DEPLOYED_SHA, health OK"
