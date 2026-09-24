@@ -1,9 +1,12 @@
 # Deploy — ginapps.my.id
 
-The site runs on **hp-server-linux** as a single Go binary serving the Astro
-build on `127.0.0.1:8321`. The Cloudflare tunnel already running on that host
-publishes it at `ginapps.my.id`, so Cloudflare terminates TLS and the origin
-needs no certificate and no open inbound port.
+**Status: live.** `https://ginapps.my.id` serves the site from
+`/srv/projects/portfolio` on hp-server-linux. Pushing to `main` deploys
+automatically within about a minute.
+
+The site runs as a single Go binary serving the Astro build on `127.0.0.1:8321`.
+The Cloudflare tunnel already running on that host publishes it, so Cloudflare
+terminates TLS and the origin needs no certificate and no open inbound port.
 
 Deployment is pull-based, matching the `ba-rekon` and `kasirumkm` pattern on the
 same host: a systemd timer checks `origin/main` every minute and runs
@@ -229,6 +232,21 @@ both only fail under systemd, never in an interactive SSH session.
 2. **`sh: 1: go: not found` inside `npm run prebuild`.** The content export is a
    `go run` invocation, so exporting only the Node bin directory is not enough;
    both directories go on `PATH`.
+
+3. **A deploy that fixes `deploy.sh` does not take effect in that same run.**
+   `git reset --hard` replaces the script while bash is reading it; bash keeps
+   executing the bytes it already loaded, so the fix is on disk, in git, and
+   simultaneously not in effect. The script now re-execs the checked-out copy
+   after updating the tree, guarded by an env var so it cannot recurse. Evidence
+   in the journal is a second line per deploy:
+
+   ```
+   [portfolio-deploy] deploying <before>..<after>
+   [portfolio-deploy] running checked-out deploy script at <after>
+   ```
+
+   If that second line is missing, an older script is still in charge — which is
+   expected exactly once after changing this file.
 
 If a deploy fails, the previous binary keeps serving: the script builds to
 `portfolio-server.new` and moves it into place only after the build succeeds, and
