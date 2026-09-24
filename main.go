@@ -42,7 +42,7 @@ func main() {
 
 	go func() {
 		log.Printf("=====================================================")
-		log.Printf("  Regio Dani Pangestu Portfolio Server (Go + Vite)")
+		log.Printf("  Regio Dani Pangestu Portfolio Server (Go + Astro)")
 		log.Printf("  Listening on http://localhost:%s", cfg.Port)
 		log.Printf("  API Base:      http://localhost:%s/api/health", cfg.Port)
 		log.Printf("  Serving Dist:  %s", cfg.FrontendDist)

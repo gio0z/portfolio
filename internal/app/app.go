@@ -196,10 +196,13 @@ func New(cfg Config) (*App, error) {
 	a.handler = &spaHandler{
 		staticPath: cfg.FrontendDist,
 		indexPath:  "index.html",
-		adminIndex: "/admin/index.html",
-		apiServer:  apiServer,
-		authMux:    authMux,
-		mcp:        mcp,
+		shells: []shellRoute{
+			{prefix: "/admin", index: "/admin/index.html"},
+			{prefix: "/lab", index: "/lab/index.html"},
+		},
+		apiServer: apiServer,
+		authMux:   authMux,
+		mcp:       mcp,
 	}
 
 	log.Printf("app: composed env=%s registry=%s", cfg.Env, registryPath)
@@ -264,16 +267,26 @@ func wireAuth(cfg Config, production bool) (*adminauth.Service, *http.ServeMux, 
 // Static output is a prerendered multi-page site, not a single shell: every
 // public route owns a directory with its own index.html, so the handler serves
 // a real file when one exists at the requested path or at its directory index.
-// The blanked SPA fallback is reserved for the two places that genuinely need
-// it — the client-only admin island, which answers every /admin/* deep link
-// from one document, and any public path that has no prerendered document.
+// The fallback is reserved for the two areas that genuinely need it — the
+// client-routed admin and Design Lab applications, whose React Router owns
+// every path beneath them — and for any public path with no prerendered
+// document.
 type spaHandler struct {
 	staticPath string
 	indexPath  string
-	adminIndex string
+	shells     []shellRoute
 	apiServer  *api.Server
 	authMux    *http.ServeMux
 	mcp        *mcppublisher.Server
+}
+
+// shellRoute is one client-routed area: every path under prefix is answered by
+// the single document at index. The admin and Design Lab applications are
+// single-page apps, so only their entry document exists as a file while React
+// Router owns the rest.
+type shellRoute struct {
+	prefix string
+	index  string
 }
 
 func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -294,11 +307,12 @@ func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The admin area is a single-page application: React Router owns every
-	// path beneath it, so only its shell exists as a file. Falling back to the
-	// public index here would serve the public site at an admin URL.
-	if isAdminPath(r.URL.Path) && h.serveFile(w, r, h.adminIndex) {
-		return
+	// Falling back to the public index for a client-routed area would serve the
+	// public site at an application URL.
+	for _, shell := range h.shells {
+		if matchesPrefix(r.URL.Path, shell.prefix) && h.serveFile(w, r, shell.index) {
+			return
+		}
 	}
 
 	indexPath := filepath.Join(h.staticPath, h.indexPath)
@@ -310,10 +324,14 @@ func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.apiServer.ServeHTTP(w, r)
 }
 
-// isAdminPath reports whether path is the admin area or lives beneath it.
-// "/administrator" is a different route and must not match.
-func isAdminPath(path string) bool {
-	return path == "/admin" || strings.HasPrefix(path, "/admin/")
+// matchesPrefix reports whether path is prefix itself or lives beneath it.
+// "/administrator" is a different route and must not match "/admin".
+func matchesPrefix(path, prefix string) bool {
+	if prefix == "" {
+		return false
+	}
+	trimmed := strings.TrimSuffix(prefix, "/")
+	return path == trimmed || strings.HasPrefix(path, trimmed+"/")
 }
 
 // serveFile serves the static file for urlPath, falling back to the directory

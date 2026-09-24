@@ -216,6 +216,44 @@ func TestMissingAdminShellDegradesGracefully(t *testing.T) {
 	}
 }
 
+// TestLabDeepLinkFallsBackToLabShell covers the client-routed Design Lab. Its
+// case studies are reached at /lab/<slug> and resolved client-side, so the
+// server must deliver the lab document for those paths.
+func TestLabDeepLinkFallsBackToLabShell(t *testing.T) {
+	dist := t.TempDir()
+	a := newStaticSiteApp(t, dist)
+	writeFile(t, filepath.Join(dist, "lab", "index.html"), "<html><body>LAB SHELL</body></html>")
+
+	for _, route := range []string{"/lab", "/lab/", "/lab/checkout-redesign"} {
+		status, body := get(t, a, route)
+		if status != http.StatusOK {
+			t.Errorf("GET %s status = %d, want 200", route, status)
+			continue
+		}
+		if !contains(body, "LAB SHELL") {
+			t.Errorf("GET %s body = %q, want the lab shell", route, body)
+		}
+	}
+}
+
+// TestShellPrefixIsExact guards the prefix match: a neighbouring route that
+// merely starts with the same letters is a public page, not a shell deep link.
+func TestShellPrefixIsExact(t *testing.T) {
+	dist := t.TempDir()
+	a := newStaticSiteApp(t, dist)
+
+	for _, route := range []string{"/administrator", "/laboratory"} {
+		status, body := get(t, a, route)
+		if status != http.StatusOK {
+			t.Errorf("GET %s status = %d, want 200", route, status)
+			continue
+		}
+		if !contains(body, "HOME") {
+			t.Errorf("GET %s body = %q, want the public fallback", route, body)
+		}
+	}
+}
+
 func contains(haystack, needle string) bool {
 	return len(needle) == 0 || len(haystack) >= len(needle) && indexOf(haystack, needle) >= 0
 }
