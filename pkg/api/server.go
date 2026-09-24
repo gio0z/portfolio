@@ -4,20 +4,103 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
+
+	"portfolio/internal/adminapi"
+	"portfolio/internal/adminauth"
+	"portfolio/internal/publicapi"
+	"portfolio/internal/publishing"
 )
 
+type ServerOption func(*Server)
+
 type Server struct {
-	mux         *http.ServeMux
-	submissions []ContactSubmission
-	mu          sync.RWMutex
+	mux           *http.ServeMux
+	submissions   []ContactSubmission
+	mu            sync.RWMutex
+	publicHandler *publicapi.Handler
+	adminHandler  *adminapi.Handler
+	adminAuth     *adminauth.Service
+	adminSubMux   http.Handler
 }
 
-func NewServer() *Server {
+// WithRepository configures the server with a publishing repository for public lab endpoints.
+func WithRepository(repo publishing.Repository) ServerOption {
+	return func(s *Server) {
+		s.publicHandler = publicapi.NewHandlerWithRepo(repo)
+	}
+}
+
+// WithPublicAPIReader configures the server with a publicapi.ProjectReader.
+func WithPublicAPIReader(reader publicapi.ProjectReader) ServerOption {
+	return func(s *Server) {
+		s.publicHandler = publicapi.NewHandler(reader)
+	}
+}
+
+// WithAdminAPI configures the server with an admin API handler and authentication service.
+func WithAdminAPI(handler *adminapi.Handler, auth *adminauth.Service) ServerOption {
+	return func(s *Server) {
+		s.adminHandler = handler
+		s.adminAuth = auth
+		if handler != nil {
+			s.adminSubMux = handler.Routes(auth)
+		}
+	}
+}
+
+// WithPublishing configures the server with full public and admin publishing services.
+func WithPublishing(service publishing.PublishingService, repo publishing.Repository, auth *adminauth.Service) ServerOption {
+	return func(s *Server) {
+		s.publicHandler = publicapi.NewHandlerWithRepo(repo)
+		s.adminHandler = adminapi.NewHandler(service, repo)
+		s.adminAuth = auth
+		if s.adminHandler != nil {
+			s.adminSubMux = s.adminHandler.Routes(auth)
+		}
+	}
+}
+
+// SetAdminAPI dynamically updates the administrative API handler and authentication service.
+func (s *Server) SetAdminAPI(handler *adminapi.Handler, auth *adminauth.Service) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.adminHandler = handler
+	s.adminAuth = auth
+	if handler != nil {
+		s.adminSubMux = handler.Routes(auth)
+	} else {
+		s.adminSubMux = nil
+	}
+}
+
+// SetRepository dynamically updates the publishing repository backing public lab endpoints.
+func (s *Server) SetRepository(repo publishing.Repository) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.publicHandler = publicapi.NewHandlerWithRepo(repo)
+}
+
+// SetPublicAPIReader dynamically updates the project reader backing public lab endpoints.
+func (s *Server) SetPublicAPIReader(reader publicapi.ProjectReader) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.publicHandler = publicapi.NewHandler(reader)
+}
+
+func NewServer(opts ...ServerOption) *Server {
 	s := &Server{
 		mux:         http.NewServeMux(),
 		submissions: make([]ContactSubmission, 0),
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	if s.publicHandler == nil {
+		s.publicHandler = publicapi.NewHandler(nil)
 	}
 	s.routes()
 	return s
@@ -27,7 +110,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// CORS headers for Vite frontend integration
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-Request-ID, X-CSRF-Token, CSRF-Token, Idempotency-Key, X-Admin-StepUp-Dev, X-Admin-Passkey-Assertion")
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
@@ -43,6 +126,58 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/projects", s.handleProjects)
 	s.mux.HandleFunc("/api/skills", s.handleSkills)
 	s.mux.HandleFunc("/api/contact", s.handleContact)
+	s.mux.HandleFunc("/api/contact/whatsapp", s.handleContactWhatsApp)
+
+	// Public Lab & Design Lab catalog endpoints
+	s.mux.HandleFunc("/api/lab/projects", func(w http.ResponseWriter, r *http.Request) {
+		s.mu.RLock()
+		h := s.publicHandler
+		s.mu.RUnlock()
+		if h != nil {
+			h.HandleListProjects(w, r)
+		} else {
+			publicapi.NewHandler(nil).HandleListProjects(w, r)
+		}
+	})
+	s.mux.HandleFunc("/api/lab/projects/", func(w http.ResponseWriter, r *http.Request) {
+		s.mu.RLock()
+		h := s.publicHandler
+		s.mu.RUnlock()
+		if h != nil {
+			h.HandleProjectSubpath(w, r)
+		} else {
+			publicapi.NewHandler(nil).HandleProjectSubpath(w, r)
+		}
+	})
+	s.mux.HandleFunc("/api/portfolio/design-lab", func(w http.ResponseWriter, r *http.Request) {
+		s.mu.RLock()
+		h := s.publicHandler
+		s.mu.RUnlock()
+		if h != nil {
+			h.HandlePortfolioDesignLab(w, r)
+		} else {
+			publicapi.NewHandler(nil).HandlePortfolioDesignLab(w, r)
+		}
+	})
+
+	// Admin Review, Publishing, and Audit endpoints
+	adminDelegate := func(w http.ResponseWriter, r *http.Request) {
+		s.mu.RLock()
+		subMux := s.adminSubMux
+		s.mu.RUnlock()
+
+		if subMux == nil {
+			http.Error(w, "unauthorized: admin service not configured", http.StatusUnauthorized)
+			return
+		}
+		subMux.ServeHTTP(w, r)
+	}
+
+	s.mux.HandleFunc("/api/admin/overview", adminDelegate)
+	s.mux.HandleFunc("/api/admin/reviews", adminDelegate)
+	s.mux.HandleFunc("/api/admin/reviews/", adminDelegate)
+	s.mux.HandleFunc("/api/admin/projects/", adminDelegate)
+	s.mux.HandleFunc("/api/admin/audit", adminDelegate)
 }
 
 func jsonResponse(w http.ResponseWriter, status int, data interface{}) {
@@ -65,30 +200,23 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	profile := Profile{
 		Name:     "Regio Dani Pangestu",
-		Tagline:  "Architecting Resilient Backend Engines & Autonomous AI Systems",
-		Title:    "Senior Full-Stack Engineer & AI Systems Architect",
-		Bio:      "Passionate software engineer specializing in high-concurrency Go microservices, reactive modern web architectures (Vite/React/TypeScript), and autonomous multi-agent systems with Hermes Agent & LLM orchestration.",
+		Tagline:  "Software that keeps working after launch",
+		Title:    "Full-Stack Engineer",
+		Bio:      "I design and build the systems small and mid-sized businesses run on — ordering and inventory, bookings, customer support, and the automation in between. One engineer from first conversation to production, so nothing gets lost in handover.",
 		Location: "Indonesia",
-		Status:   "Available for High-Impact Projects",
-		Email:    "regio@zoo.com",
-		Phone:    "+62 851-5643-9303",
+		Status:   "Available for new projects",
+		Email:    "",
+		Phone:    "",
 		Avatar:   "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
-		Stats: []StatMetric{
-			{Label: "Experience", Value: "5+ Years", Sub: "Full-Stack & Systems"},
-			{Label: "Shipped Projects", Value: "45+", Sub: "Production Grade"},
-			{Label: "Uptime & Quality", Value: "99.98%", Sub: "Zero-Downtime Releases"},
-			{Label: "Code Coverage", Value: "94%+", Sub: "Disciplined TDD"},
-		},
+		Stats:    GeneratedStats,
 		SocialLinks: map[string]string{
 			"github":   "https://github.com/gio0z",
 			"linkedin": "https://linkedin.com/in/regiodani",
 			"telegram": "https://t.me/Ingouk_bot",
-			"whatsapp": "https://wa.me/6285156439303",
 		},
 		Highlights: []string{
-			"Engineered distributed AI agent pipelines capable of multi-channel relay & autonomous execution",
-			"Core advocate of deep modular design, strict test-first development, and clean architecture",
-			"Proven track record building enterprise government booking systems, UMKM POS, and real-time gateways",
+			"Every release ships with a rollback plan",
+			"You own the code, the data, and the infrastructure — no lock-in",
 		},
 	}
 	jsonResponse(w, http.StatusOK, profile)
@@ -100,81 +228,81 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 	allProjects := []Project{
 		{
 			ID:          "jam-nguar",
-			Title:       "Jam Nguar: Government Room Booking System",
-			Tagline:     "4-tier RBAC room reservation & management engine for Blitar Regency ASN/PNS.",
-			Description: "High-integrity municipal reservation platform handling strict booking deadlines, VIP room gating, automatic conflicts resolution, and cryptographic QR code check-in.",
-			Category:    "Full-Stack",
-			Tags:        []string{"Rust", "Actix-Web", "Next.js", "PostgreSQL", "Tailwind CSS"},
+			Title:       "Jam Nguar",
+			Tagline:     "Room booking for Blitar Regency government staff.",
+			Description: "Staff book meeting rooms against real availability, with booking deadlines, VIP room rules, and conflicts caught before two people can claim the same slot. A QR code at the door confirms who actually turned up.",
+			Category:    "Government",
+			Tags:        []string{"Rust", "Actix-Web", "Next.js", "PostgreSQL"},
 			Featured:    true,
 			GithubURL:   "https://github.com/gio0z/jam-nguar",
 			DemoURL:     "https://github.com/gio0z/jam-nguar",
 			Image:       "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80",
-			Metrics:     "15k+ Monthly Bookings, Zero Double-Booking Guarantee",
+			Metrics:     "Handles booking conflicts so two people can never hold the same room",
 		},
 		{
-			ID:          "pos-kala",
-			Title:       "POS Kala: Unified UMKM Retail Engine",
-			Tagline:     "Point of sale, multi-warehouse inventory, and financial ledger platform for Indonesian SMEs.",
-			Description: "Full-featured retail operations system with offline-first transaction sync, barcode scanning, thermal receipt printing, and comprehensive margin analysis.",
-			Category:    "Full-Stack",
-			Tags:        []string{"Go", "Vite", "React", "SQLite / Postgres", "Tailwind"},
-			Featured:    true,
-			GithubURL:   "https://github.com/gio0z/pos-kala",
-			DemoURL:     "https://github.com/gio0z/pos-kala",
+			ID:          "inven-kab-blitar",
+			Title:       "Inven Kabupaten Blitar",
+			Tagline:     "Inventory and ledger for regional government stock.",
+			Description: "Regional stock is reconciled against what actually moved, so the books match the shelves. Corrections are recorded instead of overwritten, and a negative balance shows up the moment it happens rather than at year end.",
+			Category:    "Government",
+			Tags:        []string{"PHP", "CodeIgniter", "MySQL", "Docker"},
+			Featured:    false,
+			GithubURL:   "https://github.com/gio0z/inven-kab-blitar",
+			DemoURL:     "https://github.com/gio0z/inven-kab-blitar",
 			Image:       "https://images.unsplash.com/photo-1556742049-0a67e557224f?auto=format&fit=crop&w=1200&q=80",
-			Metrics:     "Processed >$500k in GMV with sub-50ms checkout latency",
-		},
-		{
-			ID:          "rustlangchain",
-			Title:       "RustLangChain: High-Performance Agentic Framework",
-			Tagline:     "Minimal LangChain-equivalent in Rust with axum HTTP API and Vite UI.",
-			Description: "Single binary AI agent framework supporting memory backends, pgvector, Qdrant vector store, Neo4j graph, and Model Context Protocol (MCP) server for Hermes Agent integration.",
-			Category:    "AI & Agents",
-			Tags:        []string{"Rust", "Axum", "Qdrant", "pgvector", "Neo4j", "React", "MCP"},
-			Featured:    true,
-			GithubURL:   "https://github.com/gio0z/rustlangchain",
-			DemoURL:     "https://github.com/gio0z/rustlangchain",
-			Image:       "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
-			Metrics:     "Sub-millisecond query execution, zero-overhead memory footprint",
-		},
-		{
-			ID:          "codebase-memory-mcp",
-			Title:       "Codebase Memory MCP Server",
-			Tagline:     "High-performance code intelligence server indexing codebases into persistent graphs.",
-			Description: "Ultra-fast knowledge graph indexer parsing 158 programming languages in milliseconds with sub-millisecond graph traversals and 99% fewer token consumptions.",
-			Category:    "Systems",
-			Tags:        []string{"C", "Knowledge Graph", "MCP", "Tree-Sitter", "AST"},
-			Featured:    true,
-			GithubURL:   "https://github.com/gio0z/codebase-memory-mcp",
-			DemoURL:     "https://github.com/gio0z/codebase-memory-mcp",
-			Image:       "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
-			Metrics:     "Average repository indexing under 80ms, 99% token reduction",
+			Metrics:     "Every stock correction is written to an audit trail",
 		},
 		{
 			ID:          "labtu-web",
-			Title:       "Labtu: Task Tracker & Collaboration Pemda",
-			Tagline:     "Aplikasi kolaborasi waktu dan task tracking untuk pemerintah daerah.",
-			Description: "Platform pelacakan penugasan aparatur daerah, sinkronisasi pekerjaan lintas bidang, dashboard pemantauan pimpinan secara real-time.",
-			Category:    "Full-Stack",
-			Tags:        []string{"JavaScript", "Node.js", "WebSockets", "Tailwind CSS", "MySQL"},
-			Featured:    false,
+			Title:       "Labtu",
+			Tagline:     "Task and milestone tracking for government teams.",
+			Description: "Daily checklists, duty catalogues, and recaps for a government division, so work in progress is visible without chasing anyone for a status update.",
+			Category:    "Government",
+			Tags:        []string{"Go", "Vite/React", "MySQL", "Docker"},
+			Featured:    true,
 			GithubURL:   "https://github.com/gio0z/labtu-web",
 			DemoURL:     "https://github.com/gio0z/labtu-web",
-			Image:       "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80",
-			Metrics:     "Digunakan aktif untuk sinkronisasi penugasan dan aset daerah",
+			Image:       "https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&w=1200&q=80",
+			Metrics:     "Replaced spreadsheet tracking for a whole division",
 		},
 		{
 			ID:          "cs-portal",
-			Title:       "CS Portal: Unified WhatsApp & Multi-Channel Bridge",
-			Tagline:     "Multi-persona AI business customer service and gateway routing portal.",
-			Description: "Enterprise customer service portal integrating Baileys WhatsApp bridge, Telegram relay, and sandboxed AI agent routing with persistent SQLite & Hindsight memory.",
+			Title:       "CS Portal",
+			Tagline:     "Multi-tenant customer service automation.",
+			Description: "Customer support runs over WhatsApp: routine questions are answered from the business's own knowledge base, staff take over any conversation that needs a person, and plans are billed from the same place.",
 			Category:    "AI & Agents",
-			Tags:        []string{"Go", "Docker", "Node.js", "Baileys", "Hermes Agent"},
+			Tags:        []string{"Go", "PostgreSQL", "Docker", "WhatsApp", "Midtrans"},
 			Featured:    true,
 			GithubURL:   "https://github.com/gio0z/cs-portal",
 			DemoURL:     "https://github.com/gio0z/cs-portal",
-			Image:       "https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&w=1200&q=80",
-			Metrics:     "Automated triage 24/7 with zero message dropped across 4 persona groups",
+			Image:       "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
+			Metrics:     "Support keeps running when staff are offline",
+		},
+		{
+			ID:          "tour-travel-web",
+			Title:       "Afsa Tour & Transport",
+			Tagline:     "Tour packages and transport rental, Blitar.",
+			Description: "A catalogue of tour packages and rental vehicles, with enquiries that reach the owner directly instead of piling up in a mailbox.",
+			Category:    "Travel",
+			Tags:        []string{"Astro", "TypeScript", "Express", "Docker"},
+			Featured:    true,
+			GithubURL:   "https://github.com/gio0z/tour-travel-web",
+			DemoURL:     "https://github.com/gio0z/tour-travel-web",
+			Image:       "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=80",
+			Metrics:     "Enquiries land in WhatsApp instead of an inbox nobody reads",
+		},
+		{
+			ID:          "nusantara-botanica",
+			Title:       "Plantea",
+			Tagline:     "Botanical export storefront.",
+			Description: "A storefront for rare plants built to serve fast: pages are generated ahead of time rather than assembled on every visit, so a catalogue page opens without waiting on a server.",
+			Category:    "Commerce",
+			Tags:        []string{"Astro", "TypeScript", "Tailwind", "Vercel"},
+			Featured:    true,
+			GithubURL:   "https://github.com/gio0z/nusantara-botanica",
+			DemoURL:     "https://github.com/gio0z/nusantara-botanica",
+			Image:       "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
+			Metrics:     "Pages load without a backend round-trip",
 		},
 	}
 
@@ -274,4 +402,44 @@ func (s *Server) handleContact(w http.ResponseWriter, r *http.Request) {
 		"message": fmt.Sprintf("Thank you, %s! Your message has been received. Regio will respond promptly.", req.Name),
 		"id":      submission.ID,
 	})
+}
+
+// handleContactWhatsApp exposes the owner's WhatsApp contact channel without
+// ever embedding the number in the frontend bundle. The number lives only in
+// the CONTACT_WHATSAPP environment variable on the server; the response
+// carries a wa.me link built from it. The number is deliberately never
+// logged and never appears in any other response.
+func (s *Server) handleContactWhatsApp(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonResponse(w, http.StatusMethodNotAllowed, map[string]string{
+			"error": "Method not allowed",
+		})
+		return
+	}
+
+	digits := onlyDigits(os.Getenv("CONTACT_WHATSAPP"))
+	if digits == "" {
+		jsonResponse(w, http.StatusNotFound, map[string]string{
+			"error": "contact channel not configured",
+		})
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]string{
+		"url": "https://wa.me/" + digits,
+	})
+}
+
+// onlyDigits strips formatting characters (spaces, dashes, a leading +) so the
+// link is valid whether the operator stored the number as "+62 851-5643-9303"
+// or as bare digits.
+func onlyDigits(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }

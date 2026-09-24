@@ -15,6 +15,10 @@ The system must keep publishing authority with the owner while allowing the agen
 
 Production engineering projects sourced from repositories owned by `gio0z`. Repository visibility does not imply publication permission. Private repositories are excluded by default unless the owner explicitly enables metadata-only publication.
 
+### Source Site
+
+The follower-nominated third-party site selected for redesign. Entered as one or more `source_urls` on draft creation; stored as reference metadata only, never as trusted content. Server fetch snapshots and agent snapshots are both derivable evidence, not execution inputs.
+
 ### Lab Project
 
 An independent redesign, prototype, or interface experiment. Every third-party redesign must carry the public label:
@@ -96,8 +100,8 @@ list_github_projects
 get_github_project
 list_lab_projects
 get_lab_project
-create_lab_draft
-update_lab_draft
+create_lab_draft (accepts optional `source_urls[]`: reference metadata only; URL reachability is advisory and never blocks draft creation)
+update_lab_draft (accepts optional `source_urls[]`: mutating sources returns the submission to `DRAFT`)
 upload_lab_asset
 deploy_lab_preview
 get_deployment_status
@@ -133,6 +137,7 @@ The primary Admin workflow. Each review displays:
 
 - Lab Project title and original product
 - Required independent-concept disclaimer
+- Source-site reference links (`source_urls`, shown as outbound links only) plus origin-vs-redesign verdict
 - Sandboxed interactive preview
 - Desktop and mobile viewport controls
 - Before/after screenshots
@@ -258,6 +263,7 @@ Switching views changes the content model, copy, and action labels; it does not 
   "title": "Product Redesign",
   "original_product": "Product Name",
   "disclaimer": "Independent redesign concept. Not affiliated with or endorsed by the original company.",
+  "source_urls": ["https://example.com/page"],
   "focus": ["navigation", "information architecture"],
   "platforms": ["web", "mobile"],
   "status": "draft",

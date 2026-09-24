@@ -7,27 +7,27 @@ export const ExpertiseSection: React.FC = () => {
   const tabs = [
     {
       id: '01',
-      title: 'Go & Distributed Systems',
-      short: 'Go Systems',
-      tag: 'BACKEND ARCHITECTURE',
-      description: 'Ultra-low latency microservices with Go net/http, gRPC, and strict concurrency safety. Optimized for high-throughput transactional integrity and sub-50ms response windows.',
-      capabilities: ['Goroutines & Channel Pipelines', 'PostgreSQL / SQLite Storage Engine', 'Idempotent REST & gRPC Contracts', 'Zero-Downtime Releases'],
+      title: 'Backend & Data',
+      short: 'Backend',
+      tag: 'THE PART YOU NEVER SEE',
+      description: 'The services and databases behind your product — built to keep working when traffic spikes, when a job fails halfway, and when someone else has to change it two years from now.',
+      capabilities: ['APIs your other tools can rely on', 'One source of truth for your data', 'Recovers cleanly from failures', 'Deploys without downtime'],
     },
     {
       id: '02',
-      title: 'Vite & Reactive Web Platforms',
-      short: 'Vite & React',
-      tag: 'FRONTEND ARCHITECTURE',
-      description: 'High-speed SPA and SSR frontends built with Vite, React 19, TypeScript, and modern Tailwind CSS design systems. Engineered for instant HMR and sub-second bundle performance.',
-      capabilities: ['Sub-second Rollup Bundles', 'Type-Safe API Client Integrations', 'Swiss & Pinterest Minimalist Aesthetics', 'Fluid Responsive UI Architecture'],
+      title: 'Web Interfaces',
+      short: 'Web',
+      tag: 'WHAT YOUR USERS TOUCH',
+      description: 'Fast, accessible interfaces that open quickly on the phones your customers actually use — and stay easy to change as the product grows.',
+      capabilities: ['Loads fast on slow connections', 'Works on phone, tablet, and desktop', 'Consistent design system', 'No surprises between releases'],
     },
     {
       id: '03',
-      title: 'Autonomous AI Agents & Mesh',
-      short: 'AI Agents',
-      tag: 'AGENTIC COMPUTING',
-      description: 'Multi-platform autonomous agent mesh orchestrating Hermes Agent, Open Design, and MCP tools across WhatsApp Baileys, Telegram, and enterprise platforms.',
-      capabilities: ['Multi-Platform Gateway Routing', 'Hindsight Long-Term Memory', 'Custom MCP Server Authoring', 'Subagent Parallel Workflows'],
+      title: 'AI & Automation',
+      short: 'AI & Automation',
+      tag: 'LESS MANUAL WORK',
+      description: 'Practical automation — assistants and integrations that take repetitive work off your team, with a human approving anything that cannot be undone.',
+      capabilities: ['Meets your customers where they already are', 'Connects to the tools you already use', 'Clear log of what it did and why', 'Human approval before anything irreversible'],
     },
   ];
 
@@ -44,14 +44,14 @@ export const ExpertiseSection: React.FC = () => {
           </div>
 
           <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-zinc-900 leading-[1.1]">
-            <span>Growth-Focused</span> <br />
-            <span className="text-zinc-400 font-bold">Systems Solutions</span>
+            <span>What I build,</span> <br />
+            <span className="text-zinc-400 font-bold">and why it holds up</span>
           </h2>
         </div>
 
         <div className="lg:col-span-5">
           <p className="text-base sm:text-lg text-zinc-600 leading-relaxed">
-            From Performance-Focused Architecture To Technical Implementation, I Provide The Resilient Infrastructure and Agentic Tools You Need To Dominate Your Industry.
+            Three things, mostly: the backend, the interface, and the automation in between — built by one engineer who stays accountable for all of it.
           </p>
         </div>
       </div>
@@ -100,7 +100,7 @@ export const ExpertiseSection: React.FC = () => {
 
             <div className="lg:col-span-5 bg-[#25252A] rounded-2xl p-6 border border-white/5">
               <div className="text-xs font-mono uppercase text-zinc-400 mb-4 tracking-wider">
-                Key Architectural Capabilities
+                What that includes
               </div>
               <div className="space-y-3">
                 {tabs[activeTab].capabilities.map((cap) => (

@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowDownRight, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
-import type { Project } from '../types';
+import type { DesignLabProject, Project } from '../types';
+import { WorkTabs } from './WorkTabs';
 
 interface CoverflowProps {
   projects: Project[];
+  labProjects?: DesignLabProject[];
+  labOrigin?: string;
 }
 
-export const CoverflowSection: React.FC<CoverflowProps> = ({ projects }) => {
+export const CoverflowSection: React.FC<CoverflowProps> = ({ projects, labProjects, labOrigin }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
@@ -80,6 +83,7 @@ export const CoverflowSection: React.FC<CoverflowProps> = ({ projects }) => {
           <span className="text-xs font-medium text-zinc-300">3D Coverflow</span>
         </div>
       </div>
+      <WorkTabs labProjects={labProjects} labOrigin={labOrigin}>
 
       {/* 3D Coverflow Viewport Container (matching the reference stage) */}
       <div
@@ -290,6 +294,7 @@ export const CoverflowSection: React.FC<CoverflowProps> = ({ projects }) => {
           </div>
         </div>
       )}
+      </WorkTabs>
     </section>
   );
 };

@@ -1,77 +1,65 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
+	"os/signal"
+	"syscall"
+	"time"
 
-	"portfolio/pkg/api"
+	"portfolio/internal/app"
 )
 
-type spaHandler struct {
-	staticPath string
-	indexPath  string
-	apiServer  *api.Server
-}
-
-func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// If the path starts with /api/, delegate directly to API server
-	if strings.HasPrefix(r.URL.Path, "/api/") {
-		h.apiServer.ServeHTTP(w, r)
-		return
-	}
-
-	// Build full path for static file
-	path := filepath.Join(h.staticPath, filepath.Clean(r.URL.Path))
-
-	// Check if file exists and is not a directory
-	fi, err := os.Stat(path)
-	if err == nil && !fi.IsDir() {
-		http.ServeFile(w, r, path)
-		return
-	}
-
-	// SPA Fallback: if not found, serve index.html
-	indexPath := filepath.Join(h.staticPath, h.indexPath)
-	if _, err := os.Stat(indexPath); err == nil {
-		http.ServeFile(w, r, indexPath)
-		return
-	}
-
-	// If no frontend build found, fall back to API server root info
-	h.apiServer.ServeHTTP(w, r)
-}
-
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	portFlag := flag.String("port", port, "Port to listen on")
-	frontendDist := flag.String("dist", "./frontend/dist", "Path to frontend dist directory")
+	cfg := app.LoadConfigFromEnv()
+
+	portFlag := flag.String("port", cfg.Port, "Port to listen on (overrides PORT)")
+	distFlag := flag.String("dist", cfg.FrontendDist, "Path to frontend dist directory (overrides FRONTEND_DIST)")
 	flag.Parse()
 
-	apiServer := api.NewServer()
+	cfg.Port = *portFlag
+	cfg.FrontendDist = *distFlag
 
-	handler := &spaHandler{
-		staticPath: *frontendDist,
-		indexPath:  "index.html",
-		apiServer:  apiServer,
+	a, err := app.New(cfg)
+	if err != nil {
+		// cfg.String redacts secrets; the error names env vars, not values.
+		log.Fatalf("Fatal: application composition failed in %s environment: %v\n%s", cfg.Env, err, cfg.String())
+	}
+	defer func() {
+		_ = a.Close()
+	}()
+
+	srv := &http.Server{
+		Addr:         "0.0.0.0:" + cfg.Port,
+		Handler:      a,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
-	addr := fmt.Sprintf("0.0.0.0:%s", *portFlag)
-	log.Printf("=====================================================")
-	log.Printf("  Regio Dani Pangestu Portfolio Server (Go + Vite)")
-	log.Printf("  Listening on http://localhost:%s", *portFlag)
-	log.Printf("  API Base:      http://localhost:%s/api/health", *portFlag)
-	log.Printf("  Serving Dist:  %s", *frontendDist)
-	log.Printf("=====================================================")
+	go func() {
+		log.Printf("=====================================================")
+		log.Printf("  Regio Dani Pangestu Portfolio Server (Go + Vite)")
+		log.Printf("  Listening on http://localhost:%s", cfg.Port)
+		log.Printf("  API Base:      http://localhost:%s/api/health", cfg.Port)
+		log.Printf("  Serving Dist:  %s", cfg.FrontendDist)
+		log.Printf("=====================================================")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server error: %v", err)
+		}
+	}()
 
-	if err := http.ListenAndServe(addr, handler); err != nil {
-		log.Fatalf("Server error: %v", err)
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+	log.Printf("Shutting down gracefully...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Graceful shutdown failed: %v", err)
 	}
 }

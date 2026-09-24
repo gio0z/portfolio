@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowDownRight, Mail, Phone, Send, MapPin, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowDownRight, MessageCircle, Send, MapPin, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import type { ContactFormData, ContactResponse } from '../types';
 
 export const ContactSection: React.FC = () => {
@@ -13,6 +13,22 @@ export const ContactSection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ContactResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // The WhatsApp number lives only in the server environment so it is never
+  // baked into the published bundle where scrapers could harvest it.
+  const [whatsappUrl, setWhatsappUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/contact/whatsapp')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { url?: string } | null) => {
+        if (!cancelled && data?.url) setWhatsappUrl(data.url);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,50 +77,37 @@ export const ContactSection: React.FC = () => {
               <span className="flex items-center justify-center w-4 h-4 rounded bg-blue-600 text-white">
                 <ArrowDownRight className="w-3 h-3" />
               </span>
-              <span>Initiate Contact</span>
+              <span>Get In Touch</span>
             </div>
 
             <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.1] mb-6">
-              <span>Let's Build.</span> <br />
-              <span className="text-zinc-500 font-bold">Something Great.</span>
+              <span>Tell me what</span> <br />
+              <span className="text-zinc-500 font-bold">you're trying to build.</span>
             </h2>
 
             <p className="text-zinc-400 text-sm sm:text-base leading-relaxed mb-10 max-w-md">
-              Whether you need a high-concurrency Go backend, ultra-fast reactive frontend, or autonomous AI agent mesh, reach out directly.
+              Describe the problem in plain terms — what's slow, what's manual, what keeps breaking. If I'm not the right person for it, I'll say so.
             </p>
 
             <div className="space-y-4">
-              <a
-                href="mailto:regio@zoo.com"
-                className="flex items-center gap-4 p-4 rounded-2xl bg-[#242428] hover:bg-[#2A2A30] border border-white/5 hover:border-blue-500/40 transition-all group"
-              >
-                <div className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center">
-                  <Mail className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-xs text-zinc-400 font-mono">EMAIL</div>
-                  <div className="text-sm font-semibold text-white group-hover:text-blue-400 transition-colors">
-                    regio@zoo.com
+              {whatsappUrl && (
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-[#242428] hover:bg-[#2A2A30] border border-white/5 hover:border-emerald-500/40 transition-all group"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center">
+                    <MessageCircle className="w-5 h-5" />
                   </div>
-                </div>
-              </a>
-
-              <a
-                href="https://wa.me/6285156439303"
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-4 p-4 rounded-2xl bg-[#242428] hover:bg-[#2A2A30] border border-white/5 hover:border-emerald-500/40 transition-all group"
-              >
-                <div className="w-10 h-10 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center">
-                  <Phone className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-xs text-zinc-400 font-mono">WHATSAPP</div>
-                  <div className="text-sm font-semibold text-white group-hover:text-emerald-400 transition-colors">
-                    +62 851-5643-9303
+                  <div>
+                    <div className="text-xs text-zinc-400 font-mono">WHATSAPP</div>
+                    <div className="text-sm font-semibold text-white group-hover:text-emerald-400 transition-colors">
+                      Chat with me directly
+                    </div>
                   </div>
-                </div>
-              </a>
+                </a>
+              )}
 
               <div className="flex items-center gap-4 p-4 rounded-2xl bg-[#242428] border border-white/5">
                 <div className="w-10 h-10 rounded-xl bg-zinc-800 text-zinc-400 flex items-center justify-center">
@@ -123,17 +126,17 @@ export const ContactSection: React.FC = () => {
           {/* Right Column: Interactive Form */}
           <div className="lg:col-span-7 bg-[#202024] rounded-[24px] p-6 sm:p-10 border border-white/5">
             <h3 className="text-xl font-bold text-white mb-2">
-              Send an Inquiry
+              Send a Message
             </h3>
             <p className="text-xs text-zinc-400 mb-6 font-mono">
-              Validated and processed by Go Backend API
+              I reply to every enquiry myself
             </p>
 
             {result && (
               <div className="mb-6 p-4 rounded-2xl bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-sm flex items-start gap-3">
                 <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-semibold text-white">Inquiry Received!</div>
+                  <div className="font-semibold text-white">Message sent</div>
                   <div className="text-xs text-emerald-200 mt-0.5">{result.message}</div>
                 </div>
               </div>
@@ -169,7 +172,7 @@ export const ContactSection: React.FC = () => {
                   <input
                     type="email"
                     required
-                    placeholder="alex@company.com"
+                    placeholder="you@yourcompany.com"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 text-sm focus:outline-none focus:border-blue-500 transition-colors"
@@ -183,7 +186,7 @@ export const ContactSection: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder="System Architecture / Collaboration"
+                  placeholder="What you need help with"
                   value={formData.subject}
                   onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 text-sm focus:outline-none focus:border-blue-500 transition-colors"
@@ -197,7 +200,7 @@ export const ContactSection: React.FC = () => {
                 <textarea
                   rows={4}
                   required
-                  placeholder="Tell me about your architecture goals or timeline..."
+                  placeholder="What are you building, and what is getting in the way?"
                   value={formData.message}
                   onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 text-sm focus:outline-none focus:border-blue-500 transition-colors resize-none"
@@ -212,11 +215,11 @@ export const ContactSection: React.FC = () => {
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Transmitting...</span>
+                    <span>Sending...</span>
                   </>
                 ) : (
                   <>
-                    <span>Submit Inquiry</span>
+                    <span>Send Message</span>
                     <Send className="w-4 h-4" />
                   </>
                 )}

@@ -15,7 +15,7 @@ type Profile struct {
 	Location    string            `json:"location"`
 	Status      string            `json:"status"`
 	Email       string            `json:"email"`
-	Phone       string            `json:"phone"`
+	Phone       string            `json:"-"` // never serialised: not scrapeable from the public API
 	Avatar      string            `json:"avatar"`
 	Stats       []StatMetric      `json:"stats"`
 	SocialLinks map[string]string `json:"social_links"`
@@ -80,7 +80,7 @@ func (c *ContactRequest) Validate() error {
 }
 
 type ContactSubmission struct {
-	ID        string    `json:"id"`
+	ID        string         `json:"id"`
 	Contact   ContactRequest `json:"contact"`
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time      `json:"created_at"`
 }
