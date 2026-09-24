@@ -17,6 +17,17 @@ GO_BIN=${PORTFOLIO_GO_BIN:-/root/.local/go/bin/go}
 NODE_BIN_DIR=${PORTFOLIO_NODE_BIN_DIR:-/root/.local/node/bin}
 LOG_TAG=portfolio-deploy
 
+# systemd starts a oneshot service with almost no environment: HOME is unset, so
+# Go cannot derive its module cache and fails with "neither GOMODCACHE nor
+# GOPATH is set", while npm would fall back to an unpredictable cache location.
+# Setting these here keeps the script correct under systemd, cron, or a bare
+# shell, instead of only working when a human runs it over SSH.
+export HOME="${PORTFOLIO_HOME:-${HOME:-/root}}"
+# $HOME/go is Go's own default, so this reuses any cache a manual run populated
+# instead of creating a second copy of the module cache.
+export GOPATH="${GOPATH:-$HOME/go}"
+export GOMODCACHE="${GOMODCACHE:-$GOPATH/pkg/mod}"
+
 log() { printf '[%s] %s\n' "$LOG_TAG" "$*"; }
 fail() { printf '[%s] FATAL: %s\n' "$LOG_TAG" "$*" >&2; exit 1; }
 
