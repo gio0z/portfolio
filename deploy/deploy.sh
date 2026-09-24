@@ -64,7 +64,23 @@ export PATH="$NODE_BIN_DIR:$(dirname "$GO_BIN"):$PATH"
     || fail "go build failed"
 mv -f "$REPO/portfolio-server.new" "$REPO/portfolio-server"
 
-# 3. Restart and health-check.
+# 3. Preview runner image. The runner launches this image per sandboxed build,
+#    so it must exist before any preview is requested. Idempotent: only built
+#    when Docker is reachable and the image is missing, because preview builds
+#    are the only thing that needs it and the rest of the site must still deploy
+#    on a host without Docker.
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    if ! docker image inspect portfolio-preview-runner:test >/dev/null 2>&1; then
+        log "building preview runner image"
+        docker build -q -f "$REPO/deploy/preview/Dockerfile.runner" \
+            -t portfolio-preview-runner:test "$REPO" >/dev/null \
+            || log "WARNING: preview runner image build failed; previews will not run"
+    fi
+else
+    log "WARNING: docker unavailable; previews will not run (the rest of the site is unaffected)"
+fi
+
+# 4. Restart and health-check.
 systemctl restart portfolio || fail "systemctl restart portfolio failed"
 
 ok=0
@@ -74,7 +90,7 @@ for _ in $(seq 1 30); do
 done
 [ "$ok" = "1" ] || fail "health check failed after deploying $AFTER"
 
-# 4. The static contract, checked on the running service: the pages must be
+# 5. The static contract, checked on the running service: the pages must be
 #    served as their own documents, not as a fallback shell.
 for path in / /about/ /work/ /services/ /contact/; do
     curl -sf --max-time 5 "$BASE_URL$path" >/dev/null || fail "$path not served"
