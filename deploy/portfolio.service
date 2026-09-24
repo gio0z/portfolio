@@ -1,0 +1,28 @@
+[Unit]
+Description=Portfolio (Go binary serving the Astro build)
+Documentation=https://github.com/gio0z/portfolio
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/projects/portfolio
+
+# All configuration, including secrets. Created by the bootstrap step in
+# deploy/README.md, never committed.
+EnvironmentFile=/etc/portfolio/portfolio.env
+
+# Bound to loopback: the Cloudflare tunnel runs on this same host and reaches
+# the service at 127.0.0.1:8321. Binding all interfaces would expose the
+# admin-capable API to the tailnet and LAN for no benefit.
+ExecStart=/srv/projects/portfolio/portfolio-server -host 127.0.0.1 -port 8321 -dist /srv/projects/portfolio/frontend/dist
+
+Restart=always
+RestartSec=5
+
+# The service only reads its own build output and writes to its data directory.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

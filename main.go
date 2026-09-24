@@ -17,10 +17,12 @@ func main() {
 	cfg := app.LoadConfigFromEnv()
 
 	portFlag := flag.String("port", cfg.Port, "Port to listen on (overrides PORT)")
+	hostFlag := flag.String("host", cfg.Host, "Interface to bind (overrides HOST)")
 	distFlag := flag.String("dist", cfg.FrontendDist, "Path to frontend dist directory (overrides FRONTEND_DIST)")
 	flag.Parse()
 
 	cfg.Port = *portFlag
+	cfg.Host = *hostFlag
 	cfg.FrontendDist = *distFlag
 
 	a, err := app.New(cfg)
@@ -33,7 +35,7 @@ func main() {
 	}()
 
 	srv := &http.Server{
-		Addr:         "0.0.0.0:" + cfg.Port,
+		Addr:         cfg.Host + ":" + cfg.Port,
 		Handler:      a,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,

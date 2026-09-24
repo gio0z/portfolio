@@ -266,3 +266,21 @@ func TestSecretsNotLogged(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadConfigHostDefaultsToAllInterfaces(t *testing.T) {
+	t.Setenv("HOST", "")
+	cfg := app.LoadConfigFromEnv()
+	if cfg.Host != "0.0.0.0" {
+		t.Errorf("Host = %q, want 0.0.0.0 (an unset HOST must not change existing behaviour)", cfg.Host)
+	}
+}
+
+func TestLoadConfigHostFromEnv(t *testing.T) {
+	// A deployment that has no firewall must be able to keep the admin-capable
+	// API off every non-loopback interface.
+	t.Setenv("HOST", "127.0.0.1")
+	cfg := app.LoadConfigFromEnv()
+	if cfg.Host != "127.0.0.1" {
+		t.Errorf("Host = %q, want 127.0.0.1", cfg.Host)
+	}
+}

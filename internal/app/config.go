@@ -22,6 +22,12 @@ import (
 type Config struct {
 	// Port is the TCP port the server listens on. Defaults to 8080.
 	Port string
+	// Host is HOST, the interface the server binds. Defaults to 0.0.0.0, which
+	// preserves the original behaviour. A deployment that reaches the service
+	// through a proxy on the same host should bind 127.0.0.1 instead: the
+	// admin API is reachable from anywhere the listener is, and a host without
+	// a firewall would otherwise expose it to the LAN.
+	Host string
 	// FrontendDist is the path to the built frontend served as static files.
 	// Defaults to ./frontend/dist.
 	FrontendDist string
@@ -107,6 +113,10 @@ func LoadConfigFromEnv() Config {
 	if port == "" {
 		port = "8080"
 	}
+	host := strings.TrimSpace(os.Getenv("HOST"))
+	if host == "" {
+		host = "0.0.0.0"
+	}
 	dist := strings.TrimSpace(os.Getenv("FRONTEND_DIST"))
 	if dist == "" {
 		dist = "./frontend/dist"
@@ -121,6 +131,7 @@ func LoadConfigFromEnv() Config {
 
 	return Config{
 		Port:              port,
+		Host:              host,
 		FrontendDist:      dist,
 		Env:               env,
 		AdminClientID:     strings.TrimSpace(os.Getenv("ADMIN_GITHUB_CLIENT_ID")),
@@ -192,8 +203,8 @@ func (c Config) validateProduction() error {
 // wrong: each new field needs one line here.
 func (c Config) String() string {
 	return fmt.Sprintf(
-		"Config{Port:%q FrontendDist:%q Env:%q AdminClientID:%q AdminClientSecret:<redacted> SessionSigningKey:<redacted> MCPTokenSecret:<redacted> AdminAllowedLogin:%q AdminPublicOrigin:%q PreviewOrigin:%q LabOrigin:%q PortfolioOrigin:%q RegistryPath:%q ArtifactStoreRoot:%q ApprovalVerifier:%s}",
-		c.Port, c.FrontendDist, c.Env, c.AdminClientID,
+		"Config{Port:%q Host:%q FrontendDist:%q Env:%q AdminClientID:%q AdminClientSecret:<redacted> SessionSigningKey:<redacted> MCPTokenSecret:<redacted> AdminAllowedLogin:%q AdminPublicOrigin:%q PreviewOrigin:%q LabOrigin:%q PortfolioOrigin:%q RegistryPath:%q ArtifactStoreRoot:%q ApprovalVerifier:%s}",
+		c.Port, c.Host, c.FrontendDist, c.Env, c.AdminClientID,
 		c.AdminAllowedLogin, c.AdminPublicOrigin,
 		c.PreviewOrigin, c.LabOrigin, c.PortfolioOrigin,
 		c.RegistryPath, c.ArtifactStoreRoot, verifierType(c.ApprovalVerifier),

@@ -120,6 +120,16 @@ startup with an error naming the variable — never its value.
 Set `APP_ENV=development` only outside production. It also disables secure
 cookies, so admin sessions would travel over plain HTTP.
 
+## Deployment
+
+The site runs on `hp-server-linux` as this Go binary behind an existing
+Cloudflare tunnel on `ginapps.my.id`. Deployment is pull-based: a systemd timer
+checks `origin/main` each minute and runs `deploy/deploy.sh`, so GitHub never
+connects to the server.
+
+See **`deploy/README.md`** for the full procedure, including the hostnames, the
+one-time server bootstrap, and the operations commands.
+
 ## Documentation
 
 | Document | Contents |

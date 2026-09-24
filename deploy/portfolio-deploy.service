@@ -1,0 +1,11 @@
+[Unit]
+Description=Portfolio pull-based deploy check
+Documentation=https://github.com/gio0z/portfolio/blob/main/deploy/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/srv/projects/portfolio/deploy/deploy.sh
+# Includes npm ci and a Go build from cold on a shared host.
+TimeoutStartSec=1800
