@@ -196,6 +196,7 @@ func New(cfg Config) (*App, error) {
 	a.handler = &spaHandler{
 		staticPath: cfg.FrontendDist,
 		indexPath:  "index.html",
+		adminIndex: "/admin/index.html",
 		apiServer:  apiServer,
 		authMux:    authMux,
 		mcp:        mcp,
@@ -259,9 +260,17 @@ func wireAuth(cfg Config, production bool) (*adminauth.Service, *http.ServeMux, 
 
 // spaHandler serves static frontend files with an SPA fallback, delegating
 // API, admin-auth, and MCP routes to the composed subsystems.
+//
+// Static output is a prerendered multi-page site, not a single shell: every
+// public route owns a directory with its own index.html, so the handler serves
+// a real file when one exists at the requested path or at its directory index.
+// The blanked SPA fallback is reserved for the two places that genuinely need
+// it — the client-only admin island, which answers every /admin/* deep link
+// from one document, and any public path that has no prerendered document.
 type spaHandler struct {
 	staticPath string
 	indexPath  string
+	adminIndex string
 	apiServer  *api.Server
 	authMux    *http.ServeMux
 	mcp        *mcppublisher.Server
@@ -281,9 +290,14 @@ func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	path := filepath.Join(h.staticPath, filepath.Clean(r.URL.Path))
-	if fi, err := os.Stat(path); err == nil && !fi.IsDir() {
-		http.ServeFile(w, r, path)
+	if h.serveFile(w, r, r.URL.Path) {
+		return
+	}
+
+	// The admin area is a single-page application: React Router owns every
+	// path beneath it, so only its shell exists as a file. Falling back to the
+	// public index here would serve the public site at an admin URL.
+	if isAdminPath(r.URL.Path) && h.serveFile(w, r, h.adminIndex) {
 		return
 	}
 
@@ -294,4 +308,29 @@ func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.apiServer.ServeHTTP(w, r)
+}
+
+// isAdminPath reports whether path is the admin area or lives beneath it.
+// "/administrator" is a different route and must not match.
+func isAdminPath(path string) bool {
+	return path == "/admin" || strings.HasPrefix(path, "/admin/")
+}
+
+// serveFile serves the static file for urlPath, falling back to the directory
+// index when urlPath names a directory. It reports whether a response was
+// written.
+func (h *spaHandler) serveFile(w http.ResponseWriter, r *http.Request, urlPath string) bool {
+	path := filepath.Join(h.staticPath, filepath.Clean("/"+urlPath))
+	fi, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	if fi.IsDir() {
+		path = filepath.Join(path, h.indexPath)
+		if fi, err = os.Stat(path); err != nil || fi.IsDir() {
+			return false
+		}
+	}
+	http.ServeFile(w, r, path)
+	return true
 }
