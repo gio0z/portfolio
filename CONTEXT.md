@@ -19,9 +19,20 @@
   - `GET /api/skills` -> Returns technical competence catalog.
   - `POST /api/contact` -> Validates email format, name, message body; returns 201 Created or 400 Bad Request.
   - `GET /api/health` -> System health probe.
-- **Seam B (Go Static Embed / File Server)**:
-  - Serves static SPA from Vite build distribution (`frontend/dist`) with fallback routing.
-- **Seam C (Vite Frontend SPA)**:
-  - React + TypeScript + Tailwind CSS client with modular component architecture.
-  - Asynchronous data fetching against Go API with graceful fallback.
-  - Fully responsive design matching high-end Pinterest portfolio references.
+- **Seam B (Go Static File Server)**:
+  - Serves the Astro build (`frontend/dist`) from one directory.
+  - Serves a real file when the requested path is one, or its directory index:
+    `/about` resolves to `about/index.html`.
+  - Falls back to a client-routed shell inside `/admin` and `/lab`, whose
+    single-page applications own every path beneath those prefixes.
+  - Falls back to the root `index.html` for any other path with no prerendered
+    document.
+- **Seam C (Astro Frontend)**:
+  - Prerendered pages: `/`, `/about`, `/work`, `/work/<id>`, `/services`,
+    `/contact` — each with its own title, description, canonical URL, Open Graph
+    tags, and JSON-LD, and the last four shipping zero JavaScript.
+  - React islands hydrate only genuine interactivity: the coverflow and
+    expertise tabs (`client:visible`), the contact form (`client:load`).
+  - `/admin` and `/lab` are client-only islands (`client:only`) and `noindex`.
+  - Content comes from `frontend/src/content/portfolio.json`, generated from the
+    Go source of truth by `tools/contentexport`. The JSON is never hand-edited.

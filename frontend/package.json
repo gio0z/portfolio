@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
+    "prebuild": "cd .. && go run ./tools/contentexport/main.go > frontend/src/content/portfolio.json",
     "build": "astro build && tsc -b",
     "preview": "astro preview",
     "check": "astro check",
