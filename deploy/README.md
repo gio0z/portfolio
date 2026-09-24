@@ -216,6 +216,24 @@ Expected: health returns `{"status":"ok"}`, `/about/` returns `200`, and the
 sitemap lists `https://ginapps.my.id/...` URLs — not `localhost`, which would
 mean `PORTFOLIO_PUBLIC_ORIGIN` was missing at build time.
 
+## Gotchas found by running this
+
+Both were found by running `deploy.sh` on the host rather than trusting it, and
+both only fail under systemd, never in an interactive SSH session.
+
+1. **`go: module cache not found: neither GOMODCACHE nor GOPATH is set`.**
+   systemd starts a oneshot service without `HOME`, so Go cannot derive its
+   module cache. `deploy.sh` now exports `HOME`, `GOPATH`, and `GOMODCACHE`
+   itself. `GOPATH` defaults to `$HOME/go`, Go's own default, so an existing
+   cache is reused instead of duplicated.
+2. **`sh: 1: go: not found` inside `npm run prebuild`.** The content export is a
+   `go run` invocation, so exporting only the Node bin directory is not enough;
+   both directories go on `PATH`.
+
+If a deploy fails, the previous binary keeps serving: the script builds to
+`portfolio-server.new` and moves it into place only after the build succeeds, and
+a failed health check aborts before the unit is restarted.
+
 ## Operations
 
 ```bash
