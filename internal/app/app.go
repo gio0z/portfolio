@@ -314,14 +314,27 @@ func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
-	indexPath := filepath.Join(h.staticPath, h.indexPath)
-	if _, err := os.Stat(indexPath); err == nil {
-		http.ServeFile(w, r, indexPath)
+	// Client routes have no file extension; assets do. Serving the root index for
+	// a missing asset would cache an HTML document under that asset URL in CDNs.
+	if ext := filepath.Ext(r.URL.Path); ext != "" && ext != ".html" {
+		w.Header().Set("Cache-Control", "no-store")
+		http.NotFound(w, r)
 		return
 	}
 
-	h.apiServer.ServeHTTP(w, r)
+	indexPath := filepath.Join(h.staticPath, h.indexPath)
+	f, err := os.Open(indexPath)
+	if err != nil {
+		h.apiServer.ServeHTTP(w, r)
+		return
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil || fi.IsDir() {
+		h.apiServer.ServeHTTP(w, r)
+		return
+	}
+	http.ServeContent(w, r, filepath.Base(indexPath), fi.ModTime(), f)
 }
 
 // matchesPrefix reports whether path is prefix itself or lives beneath it.
@@ -338,17 +351,38 @@ func matchesPrefix(path, prefix string) bool {
 // index when urlPath names a directory. It reports whether a response was
 // written.
 func (h *spaHandler) serveFile(w http.ResponseWriter, r *http.Request, urlPath string) bool {
+	// Canonicalize /path/index.html to ./ to match http.ServeFile's relative redirect.
+	if strings.HasSuffix(r.URL.Path, "/"+h.indexPath) {
+		w.Header().Set("Location", "./")
+		w.WriteHeader(http.StatusMovedPermanently)
+		return true
+	}
+
 	path := filepath.Join(h.staticPath, filepath.Clean("/"+urlPath))
-	fi, err := os.Stat(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return false
 	}
+	fi, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return false
+	}
 	if fi.IsDir() {
-		path = filepath.Join(path, h.indexPath)
-		if fi, err = os.Stat(path); err != nil || fi.IsDir() {
+		f.Close()
+		indexPath := filepath.Join(path, h.indexPath)
+		f, err = os.Open(indexPath)
+		if err != nil {
 			return false
 		}
+		fi, err = f.Stat()
+		if err != nil || fi.IsDir() {
+			f.Close()
+			return false
+		}
+		path = indexPath
 	}
-	http.ServeFile(w, r, path)
+	defer f.Close()
+	http.ServeContent(w, r, filepath.Base(path), fi.ModTime(), f)
 	return true
 }

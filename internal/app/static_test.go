@@ -58,14 +58,21 @@ func writeFile(t *testing.T, path, body string) {
 
 func get(t *testing.T, a *app.App, route string) (int, string) {
 	t.Helper()
+	resp, body := getResponse(t, a, route)
+	return resp.StatusCode, body
+}
+
+func getResponse(t *testing.T, a *app.App, route string) (*http.Response, string) {
+	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, route, nil)
 	rr := httptest.NewRecorder()
 	a.ServeHTTP(rr, req)
-	body, err := io.ReadAll(rr.Result().Body)
+	resp := rr.Result()
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read body for %s: %v", route, err)
 	}
-	return rr.Code, string(body)
+	return resp, string(body)
 }
 
 // TestServeDirectoryIndexFiles pins the contract that makes a prerendered
@@ -251,6 +258,38 @@ func TestShellPrefixIsExact(t *testing.T) {
 		if !contains(body, "HOME") {
 			t.Errorf("GET %s body = %q, want the public fallback", route, body)
 		}
+	}
+}
+
+// TestMissingAssetReturns404WithNoStore checks that a missing path with a non-html
+// extension returns 404 with Cache-Control: no-store rather than falling back to
+// the homepage, preventing CDNs from caching HTML under an asset URL.
+func TestMissingAssetReturns404WithNoStore(t *testing.T) {
+	dist := t.TempDir()
+	a := newStaticSiteApp(t, dist)
+
+	resp, _ := getResponse(t, a, "/missing.txt")
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want %q", got, "no-store")
+	}
+}
+
+// TestExistingStaticFileServedDirectly verifies that an existing static file at the root
+// or elsewhere is served with 200 and its exact content.
+func TestExistingStaticFileServedDirectly(t *testing.T) {
+	dist := t.TempDir()
+	writeFile(t, filepath.Join(dist, "robots.txt"), "User-agent: *\nDisallow:")
+	a := newStaticSiteApp(t, dist)
+
+	status, body := get(t, a, "/robots.txt")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if body != "User-agent: *\nDisallow:" {
+		t.Errorf("body = %q, want exact robots.txt content", body)
 	}
 }
 
