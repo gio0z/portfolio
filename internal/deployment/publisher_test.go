@@ -2,7 +2,10 @@ package deployment_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -14,13 +17,14 @@ import (
 // fakeLab is a controllable LabPublisher fake. Log records the call order so
 // tests can prove both destinations stage before either goes visible.
 type fakeLab struct {
-	log        *[]string
-	stageErr   error
-	visibleErr error
-	stages     int
-	visibles   int
-	rollbacks  int
-	visible    bool
+	log         *[]string
+	stageErr    error
+	visibleErr  error
+	rollbackErr error
+	stages      int
+	visibles    int
+	rollbacks   int
+	visible     bool
 }
 
 func (f *fakeLab) Stage(ctx context.Context, req publishing.PublicationRequest) (deployment.LabStaged, error) {
@@ -59,18 +63,19 @@ func (f *fakeLab) Rollback(ctx context.Context, staged deployment.LabStaged) err
 	*f.log = append(*f.log, "lab-rollback")
 	f.rollbacks++
 	f.visible = false
-	return nil
+	return f.rollbackErr
 }
 
 // fakePortfolio mirrors fakeLab for the portfolio catalog destination.
 type fakePortfolio struct {
-	log        *[]string
-	stageErr   error
-	visibleErr error
-	stages     int
-	visibles   int
-	rollbacks  int
-	visible    bool
+	log         *[]string
+	stageErr    error
+	visibleErr  error
+	rollbackErr error
+	stages      int
+	visibles    int
+	rollbacks   int
+	visible     bool
 }
 
 func (f *fakePortfolio) Stage(ctx context.Context, req publishing.PublicationRequest) (deployment.PortfolioStaged, error) {
@@ -109,7 +114,7 @@ func (f *fakePortfolio) Rollback(ctx context.Context, staged deployment.Portfoli
 	*f.log = append(*f.log, "portfolio-rollback")
 	f.rollbacks++
 	f.visible = false
-	return nil
+	return f.rollbackErr
 }
 
 const testHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -297,5 +302,269 @@ func TestAtomicPublisher_FilesystemRollbackRemovesLabArtifacts(t *testing.T) {
 	}
 	if out.LabURL == "" || out.PortfolioURL == "" {
 		t.Errorf("republish output missing URLs: %+v", out)
+	}
+}
+
+func TestLabPublisher_RollbackRestoresPreviousVersion(t *testing.T) {
+	root := t.TempDir()
+	lab := deployment.NewLabPublisher(root, "https://lab.example.test")
+	ctx := context.Background()
+
+	// 1. Stage and make visible v1
+	reqV1 := testPublicationRequest()
+	reqV1.Submission.ArtifactSHA256 = "1111111111111111111111111111111111111111111111111111111111111111"
+	stagedV1, err := lab.Stage(ctx, reqV1)
+	if err != nil {
+		t.Fatalf("Stage(v1) error = %v", err)
+	}
+	if stagedV1.PrevVersion != "" {
+		t.Errorf("stagedV1.PrevVersion = %q, want empty", stagedV1.PrevVersion)
+	}
+	if _, err := lab.MakeVisible(ctx, stagedV1); err != nil {
+		t.Fatalf("MakeVisible(v1) error = %v", err)
+	}
+
+	// 2. Stage and make visible v2
+	reqV2 := testPublicationRequest()
+	reqV2.Submission.ArtifactSHA256 = "2222222222222222222222222222222222222222222222222222222222222222"
+	stagedV2, err := lab.Stage(ctx, reqV2)
+	if err != nil {
+		t.Fatalf("Stage(v2) error = %v", err)
+	}
+	if stagedV2.PrevVersion != reqV1.Submission.ArtifactSHA256 {
+		t.Errorf("stagedV2.PrevVersion = %q, want %q", stagedV2.PrevVersion, reqV1.Submission.ArtifactSHA256)
+	}
+	if _, err := lab.MakeVisible(ctx, stagedV2); err != nil {
+		t.Fatalf("MakeVisible(v2) error = %v", err)
+	}
+
+	// 3. Rollback v2
+	if err := lab.Rollback(ctx, stagedV2); err != nil {
+		t.Fatalf("Rollback(v2) error = %v", err)
+	}
+
+	// Verify pointer points back to v1
+	ptrPath := filepath.Join(root, "var", "portfolio", "lab", "pointers", reqV1.Project.Slug+".json")
+	raw, err := os.ReadFile(ptrPath)
+	if err != nil {
+		t.Fatalf("pointer file missing after rollback: %v", err)
+	}
+	var ptr struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(raw, &ptr); err != nil {
+		t.Fatalf("unmarshal pointer: %v", err)
+	}
+	if ptr.Version != reqV1.Submission.ArtifactSHA256 {
+		t.Errorf("pointer version = %q, want v1 %q", ptr.Version, reqV1.Submission.ArtifactSHA256)
+	}
+
+	// v1 version directory must still exist intact
+	if _, err := os.Stat(stagedV1.VersionPath); err != nil {
+		t.Errorf("v1 version directory missing: %v", err)
+	}
+}
+
+func TestLabPublisher_RollbackWithoutPriorPointerRemovesAll(t *testing.T) {
+	root := t.TempDir()
+	lab := deployment.NewLabPublisher(root, "https://lab.example.test")
+	ctx := context.Background()
+
+	req := testPublicationRequest()
+	staged, err := lab.Stage(ctx, req)
+	if err != nil {
+		t.Fatalf("Stage() error = %v", err)
+	}
+	if staged.PrevVersion != "" {
+		t.Errorf("staged.PrevVersion = %q, want empty", staged.PrevVersion)
+	}
+	if _, err := lab.MakeVisible(ctx, staged); err != nil {
+		t.Fatalf("MakeVisible() error = %v", err)
+	}
+
+	if err := lab.Rollback(ctx, staged); err != nil {
+		t.Fatalf("Rollback() error = %v", err)
+	}
+
+	ptrPath := filepath.Join(root, "var", "portfolio", "lab", "pointers", req.Project.Slug+".json")
+	if _, err := os.Stat(ptrPath); !os.IsNotExist(err) {
+		t.Errorf("pointer file still exists after rollback without prior pointer: %v", err)
+	}
+	if _, err := os.Stat(staged.VersionPath); !os.IsNotExist(err) {
+		t.Errorf("version dir still exists after rollback: %v", err)
+	}
+}
+
+func TestPortfolioPublisher_RollbackRestoresPreviousVersion(t *testing.T) {
+	root := t.TempDir()
+	port := deployment.NewPortfolioCatalogPublisher(root, "https://portfolio.example.test")
+	ctx := context.Background()
+
+	// 1. Stage and make visible v1
+	reqV1 := testPublicationRequest()
+	reqV1.Submission.ArtifactSHA256 = "1111111111111111111111111111111111111111111111111111111111111111"
+	stagedV1, err := port.Stage(ctx, reqV1)
+	if err != nil {
+		t.Fatalf("Stage(v1) error = %v", err)
+	}
+	if stagedV1.PrevVersion != "" {
+		t.Errorf("stagedV1.PrevVersion = %q, want empty", stagedV1.PrevVersion)
+	}
+	if _, err := port.MakeVisible(ctx, stagedV1); err != nil {
+		t.Fatalf("MakeVisible(v1) error = %v", err)
+	}
+
+	// 2. Stage and make visible v2
+	reqV2 := testPublicationRequest()
+	reqV2.Submission.ArtifactSHA256 = "2222222222222222222222222222222222222222222222222222222222222222"
+	stagedV2, err := port.Stage(ctx, reqV2)
+	if err != nil {
+		t.Fatalf("Stage(v2) error = %v", err)
+	}
+	if stagedV2.PrevVersion != reqV1.Submission.ArtifactSHA256 {
+		t.Errorf("stagedV2.PrevVersion = %q, want %q", stagedV2.PrevVersion, reqV1.Submission.ArtifactSHA256)
+	}
+	if _, err := port.MakeVisible(ctx, stagedV2); err != nil {
+		t.Fatalf("MakeVisible(v2) error = %v", err)
+	}
+
+	// 3. Rollback v2
+	if err := port.Rollback(ctx, stagedV2); err != nil {
+		t.Fatalf("Rollback(v2) error = %v", err)
+	}
+
+	ptrPath := filepath.Join(root, "var", "portfolio", "catalog", "pointers", reqV1.Project.Slug+".json")
+	raw, err := os.ReadFile(ptrPath)
+	if err != nil {
+		t.Fatalf("pointer file missing after rollback: %v", err)
+	}
+	var ptr struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(raw, &ptr); err != nil {
+		t.Fatalf("unmarshal pointer: %v", err)
+	}
+	if ptr.Version != reqV1.Submission.ArtifactSHA256 {
+		t.Errorf("pointer version = %q, want v1 %q", ptr.Version, reqV1.Submission.ArtifactSHA256)
+	}
+
+	if _, err := os.Stat(stagedV1.VersionPath); err != nil {
+		t.Errorf("v1 version directory missing: %v", err)
+	}
+}
+
+func TestPortfolioPublisher_RollbackWithoutPriorPointerRemovesAll(t *testing.T) {
+	root := t.TempDir()
+	port := deployment.NewPortfolioCatalogPublisher(root, "https://portfolio.example.test")
+	ctx := context.Background()
+
+	req := testPublicationRequest()
+	staged, err := port.Stage(ctx, req)
+	if err != nil {
+		t.Fatalf("Stage() error = %v", err)
+	}
+	if staged.PrevVersion != "" {
+		t.Errorf("staged.PrevVersion = %q, want empty", staged.PrevVersion)
+	}
+	if _, err := port.MakeVisible(ctx, staged); err != nil {
+		t.Fatalf("MakeVisible() error = %v", err)
+	}
+
+	if err := port.Rollback(ctx, staged); err != nil {
+		t.Fatalf("Rollback() error = %v", err)
+	}
+
+	ptrPath := filepath.Join(root, "var", "portfolio", "catalog", "pointers", req.Project.Slug+".json")
+	if _, err := os.Stat(ptrPath); !os.IsNotExist(err) {
+		t.Errorf("pointer file still exists after rollback without prior pointer: %v", err)
+	}
+	if _, err := os.Stat(staged.VersionPath); !os.IsNotExist(err) {
+		t.Errorf("version dir still exists after rollback: %v", err)
+	}
+}
+
+func TestAtomicPublisher_RollbackErrorAttachedOnPublishFailure(t *testing.T) {
+	var log []string
+	lab := &fakeLab{log: &log, rollbackErr: errors.New("lab rollback failed")}
+	port := &fakePortfolio{log: &log, visibleErr: errors.New("portfolio visible failed")}
+	pub := deployment.NewAtomicPublisher(lab, port)
+
+	_, err := pub.Publish(context.Background(), testPublicationRequest())
+	if err == nil {
+		t.Fatal("Publish() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "portfolio visible failed") {
+		t.Errorf("expected original error in %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "rollback:") || !strings.Contains(err.Error(), "lab rollback failed") {
+		t.Errorf("expected rollback error in %q", err.Error())
+	}
+}
+
+func TestLabPublisher_RollbackAfterIdempotentReStagePreservesPointer(t *testing.T) {
+	root := t.TempDir()
+	lab := deployment.NewLabPublisher(root, "https://lab.example.test")
+	ctx := context.Background()
+
+	req := testPublicationRequest()
+	staged1, err := lab.Stage(ctx, req)
+	if err != nil {
+		t.Fatalf("Stage() error = %v", err)
+	}
+	if _, err := lab.MakeVisible(ctx, staged1); err != nil {
+		t.Fatalf("MakeVisible() error = %v", err)
+	}
+
+	// Re-stage the same request hitting os.IsExist branch
+	staged2, err := lab.Stage(ctx, req)
+	if err != nil {
+		t.Fatalf("re-Stage() error = %v", err)
+	}
+	if staged2.PrevVersion != req.Submission.ArtifactSHA256 {
+		t.Errorf("staged2.PrevVersion = %q, want %q", staged2.PrevVersion, req.Submission.ArtifactSHA256)
+	}
+
+	// Rollback of the re-staged instance must restore v1, not delete the pointer
+	if err := lab.Rollback(ctx, staged2); err != nil {
+		t.Fatalf("Rollback() error = %v", err)
+	}
+
+	ptrPath := filepath.Join(root, "var", "portfolio", "lab", "pointers", req.Project.Slug+".json")
+	if _, err := os.Stat(ptrPath); err != nil {
+		t.Errorf("pointer removed after rollback of re-stage: %v", err)
+	}
+}
+
+func TestPortfolioPublisher_RollbackAfterIdempotentReStagePreservesPointer(t *testing.T) {
+	root := t.TempDir()
+	port := deployment.NewPortfolioCatalogPublisher(root, "https://portfolio.example.test")
+	ctx := context.Background()
+
+	req := testPublicationRequest()
+	staged1, err := port.Stage(ctx, req)
+	if err != nil {
+		t.Fatalf("Stage() error = %v", err)
+	}
+	if _, err := port.MakeVisible(ctx, staged1); err != nil {
+		t.Fatalf("MakeVisible() error = %v", err)
+	}
+
+	// Re-stage the same request hitting os.IsExist branch
+	staged2, err := port.Stage(ctx, req)
+	if err != nil {
+		t.Fatalf("re-Stage() error = %v", err)
+	}
+	if staged2.PrevVersion != req.Submission.ArtifactSHA256 {
+		t.Errorf("staged2.PrevVersion = %q, want %q", staged2.PrevVersion, req.Submission.ArtifactSHA256)
+	}
+
+	// Rollback of the re-staged instance must restore v1, not delete the pointer
+	if err := port.Rollback(ctx, staged2); err != nil {
+		t.Fatalf("Rollback() error = %v", err)
+	}
+
+	ptrPath := filepath.Join(root, "var", "portfolio", "catalog", "pointers", req.Project.Slug+".json")
+	if _, err := os.Stat(ptrPath); err != nil {
+		t.Errorf("pointer removed after rollback of re-stage: %v", err)
 	}
 }

@@ -19,6 +19,7 @@ type LabStaged struct {
 	ArtifactHash string
 	Slug         string
 	VersionPath  string
+	PrevVersion  string
 }
 
 // PortfolioStaged is a staged-but-invisible portfolio catalog entry.
@@ -26,6 +27,7 @@ type PortfolioStaged struct {
 	ArtifactHash string
 	Slug         string
 	VersionPath  string
+	PrevVersion  string
 }
 
 // PublishedDestination is one destination after its pointer swap.
@@ -108,6 +110,8 @@ func (p *labPublisher) Stage(_ context.Context, req publishing.PublicationReques
 		return LabStaged{}, errors.New("deployment: lab artifact store root is not configured")
 	}
 
+	prevVersion := p.pointerFor(slug)
+
 	versionDir := filepath.Join(p.labVersionsDir(), hash)
 	if err := os.MkdirAll(versionDir, 0o755); err != nil {
 		return LabStaged{}, fmt.Errorf("deployment: create lab version dir: %w", err)
@@ -115,7 +119,12 @@ func (p *labPublisher) Stage(_ context.Context, req publishing.PublicationReques
 
 	// Immutable version manifest: created once, never overwritten. The
 	// sentinel + O_EXCL keeps concurrent stages from racing each other.
-	staged := LabStaged{ArtifactHash: hash, Slug: slug, VersionPath: versionDir}
+	staged := LabStaged{
+		ArtifactHash: hash,
+		Slug:         slug,
+		VersionPath:  versionDir,
+		PrevVersion:  prevVersion,
+	}
 	payload, err := json.Marshal(map[string]string{
 		"slug":            slug,
 		"artifact_sha256": hash,
@@ -188,22 +197,26 @@ func (p *labPublisher) destination(staged LabStaged) PublishedDestination {
 	}
 }
 
-// Rollback removes the pointer only if it names this staged version, and
-// removes the version directory only if nothing points at it. This keeps a
-// rollback from unpublishing an older live release that shares nothing with
-// the failed one, while cleaning the failed attempt's own artifacts.
+// Rollback restores the previous visible version if the pointer currently
+// names this staged version (or removes the pointer if there was no prior
+// version), keeping a rollback from unpublishing an older live release. The
+// staged version directory is removed only if nothing points at the slug.
 func (p *labPublisher) Rollback(_ context.Context, staged LabStaged) error {
-	ptr := p.pointerPath(staged.Slug)
-	if raw, err := os.ReadFile(ptr); err == nil {
-		var cur struct {
-			Version string `json:"version"`
-		}
-		if json.Unmarshal(raw, &cur) == nil && cur.Version == staged.ArtifactHash {
-			_ = os.Remove(ptr)
+	if p.pointerFor(staged.Slug) == staged.ArtifactHash {
+		if staged.PrevVersion != "" {
+			if err := writePointerFile(p.pointerPath(staged.Slug), staged.PrevVersion); err != nil {
+				return fmt.Errorf("deployment: rollback lab: %w", err)
+			}
+		} else {
+			if err := os.Remove(p.pointerPath(staged.Slug)); err != nil {
+				return fmt.Errorf("deployment: rollback lab: %w", err)
+			}
 		}
 	}
 	if p.pointerFor(staged.Slug) == "" {
-		_ = os.RemoveAll(staged.VersionPath)
+		if err := os.RemoveAll(staged.VersionPath); err != nil {
+			return fmt.Errorf("deployment: rollback lab: %w", err)
+		}
 	}
 	return nil
 }
@@ -245,12 +258,19 @@ func (p *portfolioPublisher) Stage(_ context.Context, req publishing.Publication
 		return PortfolioStaged{}, errors.New("deployment: portfolio artifact store root is not configured")
 	}
 
+	prevVersion := p.pointerFor(slug)
+
 	versionDir := filepath.Join(p.catalogDir(), hash)
 	if err := os.MkdirAll(versionDir, 0o755); err != nil {
 		return PortfolioStaged{}, fmt.Errorf("deployment: create catalog version dir: %w", err)
 	}
 
-	staged := PortfolioStaged{ArtifactHash: hash, Slug: slug, VersionPath: versionDir}
+	staged := PortfolioStaged{
+		ArtifactHash: hash,
+		Slug:         slug,
+		VersionPath:  versionDir,
+		PrevVersion:  prevVersion,
+	}
 	payload, err := json.Marshal(map[string]any{
 		"slug":            slug,
 		"title":           req.Project.Title,
@@ -324,20 +344,26 @@ func (p *portfolioPublisher) destination(staged PortfolioStaged) PublishedDestin
 	}
 }
 
-// Rollback removes the catalog pointer only if it names this staged version,
-// and the version directory only when unpointed.
+// Rollback restores the previous visible version if the catalog pointer
+// currently names this staged version (or removes the pointer if there was no
+// prior version), keeping a rollback from unpublishing an older live release.
+// The staged version directory is removed only if nothing points at the slug.
 func (p *portfolioPublisher) Rollback(_ context.Context, staged PortfolioStaged) error {
-	ptr := p.pointerPath(staged.Slug)
-	if raw, err := os.ReadFile(ptr); err == nil {
-		var cur struct {
-			Version string `json:"version"`
-		}
-		if json.Unmarshal(raw, &cur) == nil && cur.Version == staged.ArtifactHash {
-			_ = os.Remove(ptr)
+	if p.pointerFor(staged.Slug) == staged.ArtifactHash {
+		if staged.PrevVersion != "" {
+			if err := writePointerFile(p.pointerPath(staged.Slug), staged.PrevVersion); err != nil {
+				return fmt.Errorf("deployment: rollback portfolio: %w", err)
+			}
+		} else {
+			if err := os.Remove(p.pointerPath(staged.Slug)); err != nil {
+				return fmt.Errorf("deployment: rollback portfolio: %w", err)
+			}
 		}
 	}
 	if p.pointerFor(staged.Slug) == "" {
-		_ = os.RemoveAll(staged.VersionPath)
+		if err := os.RemoveAll(staged.VersionPath); err != nil {
+			return fmt.Errorf("deployment: rollback portfolio: %w", err)
+		}
 	}
 	return nil
 }
@@ -397,21 +423,33 @@ func (a *atomicPublisher) Publish(ctx context.Context, req publishing.Publicatio
 	}
 	portfolioStaged, err := a.portfolio.Stage(ctx, req)
 	if err != nil {
-		_ = rollbackLab(context.Background(), a.lab, labStaged)
+		if rbErr := rollbackLab(context.Background(), a.lab, labStaged); rbErr != nil {
+			return publishing.PublicationOutput{}, fmt.Errorf("deployment: stage portfolio: %w (rollback: %v)", err, rbErr)
+		}
 		return publishing.PublicationOutput{}, fmt.Errorf("deployment: stage portfolio: %w", err)
 	}
 
 	// Phase 2: final pointer swaps. Public visibility changes only here.
 	labPub, err := a.lab.MakeVisible(ctx, labStaged)
 	if err != nil {
-		_ = rollbackLab(context.Background(), a.lab, labStaged)
-		_ = rollbackPortfolio(context.Background(), a.portfolio, portfolioStaged)
+		rbErr := errors.Join(
+			rollbackLab(context.Background(), a.lab, labStaged),
+			rollbackPortfolio(context.Background(), a.portfolio, portfolioStaged),
+		)
+		if rbErr != nil {
+			return publishing.PublicationOutput{}, fmt.Errorf("deployment: publish lab: %w (rollback: %v)", err, rbErr)
+		}
 		return publishing.PublicationOutput{}, fmt.Errorf("deployment: publish lab: %w", err)
 	}
 	portfolioPub, err := a.portfolio.MakeVisible(ctx, portfolioStaged)
 	if err != nil {
-		_ = rollbackLab(context.Background(), a.lab, labStaged)
-		_ = rollbackPortfolio(context.Background(), a.portfolio, portfolioStaged)
+		rbErr := errors.Join(
+			rollbackLab(context.Background(), a.lab, labStaged),
+			rollbackPortfolio(context.Background(), a.portfolio, portfolioStaged),
+		)
+		if rbErr != nil {
+			return publishing.PublicationOutput{}, fmt.Errorf("deployment: publish portfolio: %w (rollback: %v)", err, rbErr)
+		}
 		return publishing.PublicationOutput{}, fmt.Errorf("deployment: publish portfolio: %w", err)
 	}
 
