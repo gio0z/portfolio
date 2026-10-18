@@ -6,11 +6,13 @@ export const GET: APIRoute = ({ site }) => {
   const origin = (site ?? new URL('https://regiodanipangestu.com')).origin
 
   const body = `# Public content is open to crawlers. The admin area is an
-# authenticated application with no indexable content, and /api is a JSON
-# surface that would only ever produce noise in search results.
+# authenticated application, /lab is a client-only shell that renders
+# nothing without JavaScript, and /api is a JSON surface that would only
+# ever produce noise in search results.
 User-agent: *
 Allow: /
 Disallow: /admin
+Disallow: /lab
 Disallow: /api/
 
 Sitemap: ${origin}/sitemap-index.xml

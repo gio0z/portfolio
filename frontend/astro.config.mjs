@@ -48,8 +48,12 @@ export default defineConfig({
     localOriginRequired,
     react(),
     sitemap({
-      // The admin area is an authenticated SPA with no indexable content.
-      filter: (page) => !page.includes('/admin'),
+      // The admin area is an authenticated SPA and /lab is a client-only
+      // shell; both are noindex, so listing them here would contradict their
+      // own meta tag and spend crawl budget on an empty document.
+      // Matched on the first path segment on purpose: a substring test for
+      // '/lab' also drops /work/labtu-web/, silently removing a real page.
+      filter: (page) => !/^\/(admin|lab)(\/|$)/.test(new URL(page).pathname),
     }),
   ],
   vite: {
