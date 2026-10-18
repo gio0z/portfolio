@@ -104,6 +104,9 @@ func readOutputDir(outDir string, maxBytes int64) (map[string][]byte, error) {
 				rel = prefix + "/" + item.Name()
 			}
 			full := filepath.Join(dir, item.Name())
+			if item.Type()&os.ModeSymlink != 0 {
+				return fmt.Errorf("preview: sandbox output %q is a symlink; refusing to read", rel)
+			}
 			if item.IsDir() {
 				if err := walk(full, rel); err != nil {
 					return err
