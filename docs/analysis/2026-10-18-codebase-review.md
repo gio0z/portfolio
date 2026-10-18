@@ -50,6 +50,19 @@ entry expires on its own TTL (≈4 h from the time it was stored) or needs a sin
 dashboard purge. This is the concrete production cost of row 6 — a request that
 lands inside the in-place rebuild window can be served wrong for hours.
 
+Post-deploy verification (origin through the edge, cache-busted) after `d1dffd4`:
+`/missing.txt` → `404` + `Cache-Control: no-store`; `/robots.txt` → `200` with the
+new body and no cached 404; `/no-such-page` → `200` homepage fallback intact;
+`/work/labtu-web/` → `200`.
+
+Follow-up the same check exposed: the origin still sends **no** `Cache-Control`
+on static files, so the CDN applies its own default — `/robots.txt` came back
+with `max-age=14400`, meaning a corrected `robots.txt` or sitemap can lag up to
+four hours behind a deploy. Explicit headers (long-lived/immutable for hashed
+`/_astro/*` assets, short TTL for `robots.txt` and `sitemap*.xml`) would make
+that boundary a decision instead of a default. Not changed here: it is a caching
+policy choice, not a defect with one correct answer.
+
 New defect found *by* the broadened gate, and fixed in the same pass: the sitemap filter used
 `page.includes('/lab')`, which also matched `/work/labtu-web/`, silently dropping a real project
 page from the sitemap. The filter is now anchored to the first path segment
