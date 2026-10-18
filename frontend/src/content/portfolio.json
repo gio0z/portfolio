@@ -57,7 +57,7 @@
       "github_url": "https://github.com/gio0z/jam-nguar",
       "demo_url": "https://github.com/gio0z/jam-nguar",
       "image": "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80",
-      "metrics": "Handles booking conflicts so two people can never hold the same room"
+      "metrics": "Two people can never hold the same room — conflicts are refused up front"
     },
     {
       "id": "inven-kab-blitar",
@@ -75,7 +75,7 @@
       "github_url": "https://github.com/gio0z/inven-kab-blitar",
       "demo_url": "https://github.com/gio0z/inven-kab-blitar",
       "image": "https://images.unsplash.com/photo-1556742049-0a67e557224f?auto=format&fit=crop&w=1200&q=80",
-      "metrics": "Every stock correction is written to an audit trail"
+      "metrics": "The books match the shelves, and every correction stays traceable"
     },
     {
       "id": "labtu-web",
@@ -93,7 +93,7 @@
       "github_url": "https://github.com/gio0z/labtu-web",
       "demo_url": "https://github.com/gio0z/labtu-web",
       "image": "https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&w=1200&q=80",
-      "metrics": "Replaced spreadsheet tracking for a whole division"
+      "metrics": "Spreadsheet tracking replaced: status is visible without chasing anyone"
     },
     {
       "id": "cs-portal",
@@ -112,7 +112,7 @@
       "github_url": "https://github.com/gio0z/cs-portal",
       "demo_url": "https://github.com/gio0z/cs-portal",
       "image": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
-      "metrics": "Support keeps running when staff are offline"
+      "metrics": "Routine questions answered around the clock; a person takes over when it needs one"
     },
     {
       "id": "tour-travel-web",
@@ -130,7 +130,7 @@
       "github_url": "https://github.com/gio0z/tour-travel-web",
       "demo_url": "https://github.com/gio0z/tour-travel-web",
       "image": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=80",
-      "metrics": "Enquiries land in WhatsApp instead of an inbox nobody reads"
+      "metrics": "Enquiries reach the owner directly instead of sitting in an inbox"
     },
     {
       "id": "nusantara-botanica",
@@ -148,7 +148,7 @@
       "github_url": "https://github.com/gio0z/nusantara-botanica",
       "demo_url": "https://github.com/gio0z/nusantara-botanica",
       "image": "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
-      "metrics": "Pages load without a backend round-trip"
+      "metrics": "Catalogue pages open without a server round-trip"
     }
   ],
   "skill_categories": [

@@ -61,7 +61,7 @@ var portfolioProjects = []Project{
 		GithubURL:   "https://github.com/gio0z/jam-nguar",
 		DemoURL:     "https://github.com/gio0z/jam-nguar",
 		Image:       "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80",
-		Metrics:     "Handles booking conflicts so two people can never hold the same room",
+		Metrics:     "Two people can never hold the same room — conflicts are refused up front",
 	},
 	{
 		ID:          "inven-kab-blitar",
@@ -74,7 +74,7 @@ var portfolioProjects = []Project{
 		GithubURL:   "https://github.com/gio0z/inven-kab-blitar",
 		DemoURL:     "https://github.com/gio0z/inven-kab-blitar",
 		Image:       "https://images.unsplash.com/photo-1556742049-0a67e557224f?auto=format&fit=crop&w=1200&q=80",
-		Metrics:     "Every stock correction is written to an audit trail",
+		Metrics:     "The books match the shelves, and every correction stays traceable",
 	},
 	{
 		ID:          "labtu-web",
@@ -87,7 +87,7 @@ var portfolioProjects = []Project{
 		GithubURL:   "https://github.com/gio0z/labtu-web",
 		DemoURL:     "https://github.com/gio0z/labtu-web",
 		Image:       "https://images.unsplash.com/photo-1531403009284-440f080d1e12?auto=format&fit=crop&w=1200&q=80",
-		Metrics:     "Replaced spreadsheet tracking for a whole division",
+		Metrics:     "Spreadsheet tracking replaced: status is visible without chasing anyone",
 	},
 	{
 		ID:          "cs-portal",
@@ -100,7 +100,7 @@ var portfolioProjects = []Project{
 		GithubURL:   "https://github.com/gio0z/cs-portal",
 		DemoURL:     "https://github.com/gio0z/cs-portal",
 		Image:       "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
-		Metrics:     "Support keeps running when staff are offline",
+		Metrics:     "Routine questions answered around the clock; a person takes over when it needs one",
 	},
 	{
 		ID:          "tour-travel-web",
@@ -113,7 +113,7 @@ var portfolioProjects = []Project{
 		GithubURL:   "https://github.com/gio0z/tour-travel-web",
 		DemoURL:     "https://github.com/gio0z/tour-travel-web",
 		Image:       "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=80",
-		Metrics:     "Enquiries land in WhatsApp instead of an inbox nobody reads",
+		Metrics:     "Enquiries reach the owner directly instead of sitting in an inbox",
 	},
 	{
 		ID:          "nusantara-botanica",
@@ -126,7 +126,7 @@ var portfolioProjects = []Project{
 		GithubURL:   "https://github.com/gio0z/nusantara-botanica",
 		DemoURL:     "https://github.com/gio0z/nusantara-botanica",
 		Image:       "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
-		Metrics:     "Pages load without a backend round-trip",
+		Metrics:     "Catalogue pages open without a server round-trip",
 	},
 }
 
