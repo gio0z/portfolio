@@ -25,6 +25,30 @@ suite, `go vet`, vitest (73 tests), the Astro build and the static-output contra
 | Blocker 4 — sandbox output refuses symlink entries before reading, failing closed | `internal/preview/docker_runner.go`, new `internal/preview/docker_runner_test.go` | `go test ./internal/preview/` |
 | Row 5 — gate now probes every project page from `portfolio.json`, permits only `ld+json` script tags on static pages, asserts `/admin` and `/lab` are absent from the sitemap, and uses `mktemp` for the freshness check | `scripts/run-publishing-e2e.sh` | full gate run |
 | SEO — `/lab` excluded from the sitemap and disallowed in robots.txt | `frontend/astro.config.mjs`, `frontend/src/pages/robots.txt.ts` | full gate run |
+| Static handler serves from an open handle and answers a missing extension-bearing path with `Cache-Control: no-store` instead of the homepage | `internal/app/app.go`, `internal/app/static_test.go` | full gate run |
+
+### Incident observed live while verifying the deploy (2026-10-18)
+
+`https://ginapps.my.id/robots.txt` returned `404` from Cloudflare with
+`cf-cache-status: HIT`, `age: 165`, `Cache-Control: max-age=14400`, body
+`404 page not found`, while the origin answered `200` for the same path
+(`curl http://127.0.0.1:8321/robots.txt`, file present in `frontend/dist`).
+
+Two defects compound here, and both are now fixed on the origin side:
+
+1. `http.ServeFile` writes its own plain-text 404 when the file disappears
+   between the caller's `os.Stat` and its `open`. `deploy/deploy.sh` rebuilds
+   `frontend/dist` in place, so that window opens on every deploy — `serveFile`
+   now serves the opened handle instead.
+2. The homepage fallback answered a missing *asset* with `200 text/html`, which
+   a CDN will cache under the asset URL. A missing extension-bearing path is now
+   an explicit `404` with `Cache-Control: no-store`.
+
+Cached entries already stored at the edge are not purged by this change: the
+Cloudflare account has no purge token on this host, so the stale `/robots.txt`
+entry expires on its own TTL (≈4 h from the time it was stored) or needs a single
+dashboard purge. This is the concrete production cost of row 6 — a request that
+lands inside the in-place rebuild window can be served wrong for hours.
 
 New defect found *by* the broadened gate, and fixed in the same pass: the sitemap filter used
 `page.includes('/lab')`, which also matched `/work/labtu-web/`, silently dropping a real project
@@ -101,7 +125,7 @@ entry is a regular file.
 | # | Finding | Evidence | Status |
 |---|---------|----------|--------|
 | 5 | Verification gate probes 1 of 6 project pages; zero-JS regex matches only `src="/_astro/*.js"`; sitemap check never asserts `/lab` exclusion; fixed `/tmp/contentexport-fresh.json` path with no trap | `scripts/run-publishing-e2e.sh:15,28-33,60,68-71`; project ids verified: `jam-nguar, inven-kab-blitar, labtu-web, cs-portal, tour-travel-web, nusantara-botanica` | [V] **FIXED** |
-| 6 | Deploy has no rollback despite the header claim: `frontend/dist` is rebuilt in place, `git reset --hard origin/main` runs *before* any build, previous binary never backed up; health-check failure leaves the broken revision in place and the next timer run sees `BEFORE == AFTER` | `deploy/deploy.sh:3,70-76,86,119-126` | [R] |
+| 6 | Deploy has no rollback despite the header claim: `frontend/dist` is rebuilt in place, `git reset --hard origin/main` runs *before* any build, previous binary never backed up; health-check failure leaves the broken revision in place and the next timer run sees `BEFORE == AFTER` | `deploy/deploy.sh:3,70-76,86,119-126`; the in-place rebuild window produced a cached 404 in production on 2026-10-18 (see the incident note above) | [R] |
 | 7 | Unbounded in-memory growth on the public surface: contact submissions appended and never read/evicted, no `MaxBytesReader` on `/api/contact`; `MemorySessionStore` never evicts un-`Get`-ed sessions | `pkg/api/server.go:22,238,258`; `internal/adminauth/session.go:43-79` | [V] |
 | 8 | State machine bypassed: `UpdateDraft` blocks only PUBLISHED/ARCHIVED/REJECTED, then sets `State = Draft`, so an agent can pull a submission out of `IN_REVIEW` unilaterally; `APPROVED` is unreachable (publish jumps `IN_REVIEW → PUBLISHED`) | `internal/publishing/service.go:284,324,809`; `internal/publishing/state.go:27-40` | [V] |
 | 9 | JSON-LD interpolated raw into an inline `<script>`: `JSON.stringify` output reaches `set:html` unescaped, so any `</script>` in content breaks the document head | `frontend/src/lib/seo.ts:96,114`; `frontend/src/layouts/BaseLayout.astro:52` | [V] (exploitability limited: content is author-authored) |
